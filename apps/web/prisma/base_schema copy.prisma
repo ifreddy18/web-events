@@ -1,0 +1,1398 @@
+// // This is your Prisma schema file,
+// // learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// // Get a free hosted Postgres database in seconds: `npx create-db`
+
+// /// =====================================================
+// /// Prisma Client Generator
+// /// =====================================================
+
+// generator client {
+//   provider = "prisma-client"
+//   output   = "../app/generated/prisma"
+// }
+
+// /// =====================================================
+// /// PostgreSQL Database Connection
+// /// =====================================================
+
+// datasource db {
+//   provider  = "postgresql"
+//   url       = env("DATABASE_URL")
+//   directUrl = env("DIRECT_URL")
+// }
+
+// /// ============================================================================
+// /// M O D E L S
+// /// ============================================================================
+
+// /// =====================================================
+// /// SPORT
+// /// =====================================================
+// /// High-level sports grouping.
+// ///
+// /// Examples:
+// /// - Running
+// /// - Cycling
+// /// - Fitness
+// ///
+// /// Used to group multiple disciplines.
+// /// =====================================================
+
+// model Sport {
+//   /// Primary UUID identifier
+//   id String @id @default(uuid()) @db.Uuid
+
+//   /// Public sport name
+//   ///
+//   /// Example:
+//   /// Running
+//   name String
+
+//   /// SEO-friendly unique slug
+//   ///
+//   /// Example:
+//   /// running
+//   slug String @unique
+
+//   /// Optional public description
+//   description String?
+
+//   /// Sport disciplines
+//   disciplines Discipline[]
+
+//   /// Record creation timestamp
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   /// Record last update timestamp
+//   updatedAt DateTime @updatedAt @map("updated_at")
+
+//   /// Soft delete timestamp
+//   deletedAt DateTime? @map("deleted_at")
+
+//   @@index([slug])
+
+//   /// Database table mapping
+//   @@map("sports")
+// }
+
+// /// =====================================================
+// /// DISCIPLINE
+// /// =====================================================
+// /// Specific competitive discipline.
+// ///
+// /// Examples:
+// /// - Trail Running
+// /// - Road Running
+// /// - Triathlon
+// /// - Hyrox
+// /// - CrossFit
+// ///
+// /// Disciplines belong to a Sport.
+// /// =====================================================
+
+// model Discipline {
+//   /// Primary UUID identifier
+//   id String @id @default(uuid()) @db.Uuid
+
+//   /// Parent sport reference
+//   sportId String @map("sport_id") @db.Uuid
+
+//   /// Public discipline name
+//   name String
+
+//   /// SEO-friendly unique slug
+//   slug String @unique
+
+//   /// Optional discipline description
+//   description String?
+
+//   /// Flexible discipline-specific configuration
+//   ///
+//   /// Can contain:
+//   /// - rules
+//   /// - metadata schema
+//   /// - discipline settings
+//   metadata Json?
+
+//   /// Parent sport relation
+//   sport Sport @relation(fields: [sportId], references: [id])
+
+//   /// Event series associated with this discipline
+//   eventSeries EventSeries[]
+
+//   /// Competitions using this discipline
+//   competitions Competition[]
+
+//   /// Creation timestamp
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   /// Last update timestamp
+//   updatedAt DateTime @updatedAt @map("updated_at")
+
+//   /// Soft delete timestamp
+//   deletedAt DateTime? @map("deleted_at")
+
+//   @@index([sportId])
+//   @@index([slug])
+
+//   @@map("disciplines")
+// }
+
+// /// =====================================================
+// /// ORGANIZER
+// /// =====================================================
+// /// Organization or company responsible for events.
+// ///
+// /// Examples:
+// /// - Race organizers
+// /// - Sports production companies
+// /// =====================================================
+
+// model Organizer {
+//   /// Primary UUID identifier
+//   id String @id @default(uuid()) @db.Uuid
+
+//   /// Public organizer name
+//   name String
+
+//   /// SEO-friendly unique slug
+//   slug String @unique
+
+//   /// Organizer description
+//   description String?
+
+//   /// Official website
+//   website String?
+
+//   /// Instagram profile URL or handle
+//   instagram String?
+
+//   /// Organizer logo image URL
+//   logoUrl String? @map("logo_url")
+
+//   /// Events created by this organizer
+//   eventSeries EventSeries[]
+
+//   /// Creation timestamp
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   /// Last update timestamp
+//   updatedAt DateTime @updatedAt @map("updated_at")
+
+//   /// Soft delete timestamp
+//   deletedAt DateTime? @map("deleted_at")
+
+//   @@index([slug])
+
+//   @@map("organizers")
+// }
+
+// /// =====================================================
+// /// LOCATION
+// /// =====================================================
+// /// Physical location where an event takes place.
+// ///
+// /// Can represent:
+// /// - Cities
+// /// - Parks
+// /// - Stadiums
+// /// - Mountains
+// /// - Beaches
+// /// - Sports venues
+// ///
+// /// Reusable across multiple event editions.
+// /// =====================================================
+
+// model Location {
+//   /// Primary UUID identifier
+//   id String @id @default(uuid()) @db.Uuid
+
+//   /// Country name
+//   ///
+//   /// Example:
+//   /// Venezuela
+//   country String
+
+//   /// State or province
+//   ///
+//   /// Example:
+//   /// Miranda
+//   state String?
+
+//   /// City name
+//   ///
+//   /// Example:
+//   /// Caracas
+//   city String?
+
+//   /// Venue or place name
+//   ///
+//   /// Example:
+//   /// Parque Nacional El Ávila
+//   venueName String? @map("venue_name")
+
+//   /// Full public address
+//   address String?
+
+//   /// Latitude coordinate
+//   latitude Decimal? @db.Decimal(9, 6)
+
+//   /// Longitude coordinate
+//   longitude Decimal? @db.Decimal(9, 6)
+
+//   /// Event editions using this location
+//   eventEditions EventEdition[]
+
+//   /// Creation timestamp
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   /// Last update timestamp
+//   updatedAt DateTime @updatedAt @map("updated_at")
+
+//   /// Soft delete timestamp
+//   deletedAt DateTime? @map("deleted_at")
+
+//   @@index([country])
+//   @@index([state])
+//   @@index([city])
+
+//   @@map("locations")
+// }
+
+// /// =====================================================
+// /// EVENT SERIES
+// /// =====================================================
+// /// Parent recurring event.
+// ///
+// /// Represents the permanent event identity,
+// /// independent of yearly editions.
+// ///
+// /// Examples:
+// /// - Gulima Trail Run
+// /// - Maratón CAF
+// /// - Ironman Cartagena
+// ///
+// /// Each EventSeries can have multiple yearly editions.
+// /// =====================================================
+
+// model EventSeries {
+//   /// Primary UUID identifier
+//   id String @id @default(uuid()) @db.Uuid
+
+//   /// Organizer responsible for the event
+//   organizerId String @map("organizer_id") @db.Uuid
+
+//   /// Primary discipline of the event
+//   disciplineId String @map("discipline_id") @db.Uuid
+
+//   /// Public event name
+//   name String
+
+//   /// SEO-friendly unique slug
+//   ///
+//   /// Example:
+//   /// gulima-trail-run
+//   slug String @unique
+
+//   /// Public description
+//   description String?
+
+//   /// Official website URL
+//   officialWebsite String? @map("official_website")
+
+//   /// Instagram profile URL or handle
+//   instagram String?
+
+//   /// Event status
+//   ///
+//   /// Examples:
+//   /// active
+//   /// cancelled
+//   /// archived
+//   status String @default("active")
+
+//   /// Flexible event metadata
+//   ///
+//   /// Can contain:
+//   /// - branding
+//   /// - general rules
+//   /// - audience
+//   /// - organizer notes
+//   metadata Json?
+
+//   /// Organizer relation
+//   organizer Organizer @relation(fields: [organizerId], references: [id])
+
+//   /// Main discipline relation
+//   discipline Discipline @relation(fields: [disciplineId], references: [id])
+
+//   /// Yearly event editions
+//   editions EventEdition[]
+
+//   /// Creation timestamp
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   /// Last update timestamp
+//   updatedAt DateTime @updatedAt @map("updated_at")
+
+//   /// Soft delete timestamp
+//   deletedAt DateTime? @map("deleted_at")
+
+//   @@index([organizerId])
+//   @@index([disciplineId])
+//   @@index([slug])
+//   @@index([status])
+
+//   @@map("event_series")
+// }
+
+// /// =====================================================
+// /// EVENT EDITION
+// /// =====================================================
+// /// Specific yearly edition of an event.
+// ///
+// /// Examples:
+// /// - Gulima Trail Run 2025
+// /// - Gulima Trail Run 2026
+// ///
+// /// Stores edition-specific data:
+// /// - dates
+// /// - pricing
+// /// - registration
+// /// - results
+// /// - routes
+// /// =====================================================
+
+// model EventEdition {
+//   /// Primary UUID identifier
+//   id String @id @default(uuid()) @db.Uuid
+
+//   /// Parent event series reference
+//   eventSeriesId String @map("event_series_id") @db.Uuid
+
+//   /// Event location reference
+//   locationId String? @map("location_id") @db.Uuid
+
+//   /// Edition year
+//   ///
+//   /// Example:
+//   /// 2026
+//   year Int
+
+//   /// Public edition name
+//   ///
+//   /// Example:
+//   /// Gulima Trail Run 2026
+//   name String
+
+//   /// SEO-friendly unique slug
+//   ///
+//   /// Example:
+//   /// gulima-trail-run-2026
+//   slug String @unique
+
+//   /// Registration opening date
+//   registrationOpenAt DateTime? @map("registration_open_at")
+
+//   /// Registration closing date
+//   registrationCloseAt DateTime? @map("registration_close_at")
+
+//   /// Event start date/time
+//   startsAt DateTime @map("starts_at")
+
+//   /// Event end date/time
+//   endsAt DateTime? @map("ends_at")
+
+//   /// Registration URL
+//   registrationUrl String? @map("registration_url")
+
+//   /// Official results URL
+//   resultsUrl String? @map("results_url")
+
+//   /// Event edition status
+//   ///
+//   /// Examples:
+//   /// draft
+//   /// published
+//   /// completed
+//   /// cancelled
+//   status String @default("draft")
+
+//   /// Flexible edition metadata
+//   ///
+//   /// Can contain:
+//   /// - GPX routes
+//   /// - elevation profiles
+//   /// - schedules
+//   /// - cutoffs
+//   /// - sponsors
+//   metadata Json?
+
+//   /// Parent event series relation
+//   eventSeries EventSeries @relation(fields: [eventSeriesId], references: [id])
+
+//   /// Location relation
+//   location Location? @relation(fields: [locationId], references: [id])
+
+//   /// Competitions inside this edition
+//   competitions Competition[]
+
+//   /// Linked service providers
+//   eventServiceProviders EventServiceProvider[]
+
+//   /// Creation timestamp
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   /// Last update timestamp
+//   updatedAt DateTime @updatedAt @map("updated_at")
+
+//   /// Soft delete timestamp
+//   deletedAt DateTime? @map("deleted_at")
+
+//   /// Prevent duplicated years per event
+//   @@unique([eventSeriesId, year])
+
+//   @@index([eventSeriesId])
+//   @@index([locationId])
+//   @@index([status])
+//   @@index([startsAt])
+
+//   @@map("event_editions")
+// }
+
+// /// =====================================================
+// /// COMPETITION
+// /// =====================================================
+// /// Individual competitive category or race
+// /// inside an EventEdition.
+// ///
+// /// Examples:
+// /// - 5K
+// /// - 21K
+// /// - Sprint Triathlon
+// /// - RX Division
+// /// - Elite Men
+// ///
+// /// Structure varies by discipline.
+// /// Flexible metadata is stored using JSON.
+// /// =====================================================
+
+// model Competition {
+//   /// Primary UUID identifier
+//   id String @id @default(uuid()) @db.Uuid
+
+//   /// Parent event edition reference
+//   eventEditionId String @map("event_edition_id") @db.Uuid
+
+//   /// Competition discipline reference
+//   disciplineId String @map("discipline_id") @db.Uuid
+
+//   /// Public competition name
+//   ///
+//   /// Example:
+//   /// 21K Trail
+//   name String
+
+//   /// SEO-friendly slug
+//   slug String
+
+//   /// Public competition description
+//   description String?
+
+//   /// Competition status
+//   ///
+//   /// Examples:
+//   /// active
+//   /// cancelled
+//   /// completed
+//   status String @default("active")
+
+//   /// Flexible competition metadata
+//   ///
+//   /// Examples:
+//   ///
+//   /// Running:
+//   /// - distance
+//   /// - elevation
+//   ///
+//   /// Triathlon:
+//   /// - swim distance
+//   /// - bike distance
+//   /// - run distance
+//   ///
+//   /// Hyrox:
+//   /// - workouts
+//   /// - divisions
+//   metadata Json?
+
+//   /// Parent event edition relation
+//   eventEdition EventEdition @relation(fields: [eventEditionId], references: [id])
+
+//   /// Discipline relation
+//   discipline Discipline @relation(fields: [disciplineId], references: [id])
+
+//   /// Competition results
+//   results Result[]
+
+//   /// Creation timestamp
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   /// Last update timestamp
+//   updatedAt DateTime @updatedAt @map("updated_at")
+
+//   /// Soft delete timestamp
+//   deletedAt DateTime? @map("deleted_at")
+
+//   /// Prevent duplicate competition names inside same edition
+//   @@unique([eventEditionId, slug])
+
+//   @@index([eventEditionId])
+//   @@index([disciplineId])
+//   @@index([status])
+
+//   @@map("competitions")
+// }
+
+// /// =====================================================
+// /// ATHLETE
+// /// =====================================================
+// /// Public athlete profile.
+// ///
+// /// Represents a participant appearing in event results.
+// ///
+// /// Important:
+// /// An athlete is NOT necessarily an authenticated user.
+// ///
+// /// Athlete profiles may initially be created automatically
+// /// during result imports.
+// /// =====================================================
+
+// model Athlete {
+//   /// Primary UUID identifier
+//   id String @id @default(uuid()) @db.Uuid
+
+//   /// Athlete first name
+//   firstName String @map("first_name")
+
+//   /// Athlete last name
+//   lastName String @map("last_name")
+
+//   /// Full public display name
+//   ///
+//   /// Useful for:
+//   /// - imported results
+//   /// - quick search
+//   /// - SEO
+//   fullName String @map("full_name")
+
+//   /// Athlete gender
+//   ///
+//   /// Examples:
+//   /// male
+//   /// female
+//   /// non_binary
+//   gender String?
+
+//   /// ISO country code
+//   ///
+//   /// Examples:
+//   /// VE
+//   /// US
+//   /// CO
+//   countryCode String? @map("country_code")
+
+//   /// Birth date
+//   birthDate DateTime? @map("birth_date")
+
+//   /// Instagram profile
+//   instagram String?
+
+//   /// Public biography
+//   bio String?
+
+//   /// Athlete profile image URL
+//   profileImageUrl String? @map("profile_image_url")
+
+//   /// Flexible athlete metadata
+//   ///
+//   /// Can contain:
+//   /// - emergency contact
+//   /// - equipment preferences
+//   /// - aliases
+//   /// - federation ids
+//   metadata Json?
+
+//   /// Athlete results
+//   results Result[]
+
+//   /// Creation timestamp
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   /// Last update timestamp
+//   updatedAt DateTime @updatedAt @map("updated_at")
+
+//   /// Soft delete timestamp
+//   deletedAt DateTime? @map("deleted_at")
+
+//   /// Full name search index
+//   @@index([fullName])
+
+//   /// Country filtering index
+//   @@index([countryCode])
+
+//   @@map("athletes")
+// }
+
+// /// =====================================================
+// /// RESULT
+// /// =====================================================
+// /// Athlete performance result inside a competition.
+// ///
+// /// This table will likely become one of the
+// /// largest tables in the platform.
+// ///
+// /// Represents:
+// /// Athlete + Competition + Performance
+// /// =====================================================
+
+// model Result {
+//   /// Primary UUID identifier
+//   id String @id @default(uuid()) @db.Uuid
+
+//   /// Competition reference
+//   competitionId String @map("competition_id") @db.Uuid
+
+//   /// Athlete reference
+//   athleteId String @map("athlete_id") @db.Uuid
+
+//   /// Athlete bib number
+//   ///
+//   /// Example:
+//   /// 245
+//   bibNumber String? @map("bib_number")
+
+//   /// Official finish time in seconds
+//   ///
+//   /// Example:
+//   /// 5234
+//   ///
+//   /// Easier for:
+//   /// - sorting
+//   /// - ranking
+//   /// - calculations
+//   officialTimeSeconds Int? @map("official_time_seconds")
+
+//   /// Chip/net finish time in seconds
+//   chipTimeSeconds Int? @map("chip_time_seconds")
+
+//   /// Athlete overall position
+//   ///
+//   /// Example:
+//   /// 15
+//   overallRank Int? @map("overall_rank")
+
+//   /// Athlete gender position
+//   genderRank Int? @map("gender_rank")
+
+//   /// Athlete category position
+//   categoryRank Int? @map("category_rank")
+
+//   /// Result status
+//   ///
+//   /// Examples:
+//   /// finished
+//   /// dnf
+//   /// dns
+//   /// dq
+//   status String @default("finished")
+
+//   /// Flexible result metadata
+//   ///
+//   /// Examples:
+//   ///
+//   /// Running:
+//   /// - pace
+//   /// - elevation splits
+//   ///
+//   /// Triathlon:
+//   /// - swim time
+//   /// - bike time
+//   /// - transitions
+//   ///
+//   /// Hyrox:
+//   /// - station times
+//   metadata Json?
+
+//   /// Competition relation
+//   competition Competition @relation(fields: [competitionId], references: [id])
+
+//   /// Athlete relation
+//   athlete Athlete @relation(fields: [athleteId], references: [id])
+
+//   /// Creation timestamp
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   /// Last update timestamp
+//   updatedAt DateTime @updatedAt @map("updated_at")
+
+//   /// Soft delete timestamp
+//   deletedAt DateTime? @map("deleted_at")
+
+//   /// Prevent duplicated athlete results
+//   /// inside same competition
+//   @@unique([competitionId, athleteId])
+
+//   /// Competition ranking index
+//   @@index([competitionId])
+
+//   /// Athlete history index
+//   @@index([athleteId])
+
+//   /// Leaderboard queries
+//   @@index([competitionId, overallRank])
+
+//   /// Fast athlete result lookup
+//   @@index([competitionId, bibNumber])
+
+//   /// Status filtering
+//   @@index([status])
+
+//   @@map("results")
+// }
+
+// /// =====================================================
+// /// SERVICE PROVIDER TYPE
+// /// =====================================================
+// /// Defines the category of a service provider.
+// ///
+// /// Examples:
+// /// - photographer
+// /// - physiotherapist
+// /// - nutritionist
+// /// - coach
+// /// - running_club
+// /// =====================================================
+
+// model ServiceProviderType {
+//   /// Primary UUID identifier
+//   id String @id @default(uuid()) @db.Uuid
+
+//   /// Type name
+//   name String
+
+//   /// Unique slug identifier
+//   slug String @unique
+
+//   /// Description of provider type
+//   description String?
+
+//   /// Providers under this type
+//   providers ServiceProvider[]
+
+//   createdAt DateTime @default(now()) @map("created_at")
+//   updatedAt DateTime @updatedAt @map("updated_at")
+
+//   @@index([slug])
+
+//   @@map("service_provider_types")
+// }
+
+// /// =====================================================
+// /// SERVICE PROVIDER
+// /// =====================================================
+// /// Generic entity for any sports-related service provider.
+// ///
+// /// Includes:
+// /// - photographers
+// /// - coaches
+// /// - physiotherapists
+// /// - nutritionists
+// /// - clubs
+// ///
+// /// Designed to unify all "people/businesses" offering
+// /// services in the sports ecosystem.
+// /// =====================================================
+
+// model ServiceProvider {
+//   /// Primary UUID identifier
+//   id String @id @default(uuid()) @db.Uuid
+
+//   /// Provider type reference
+//   typeId String @map("type_id") @db.Uuid
+
+//   /// Display name
+//   name String
+
+//   /// SEO slug
+//   slug String @unique
+
+//   /// Short description
+//   description String?
+
+//   /// Contact email
+//   email String?
+
+//   /// Phone / WhatsApp
+//   phone String?
+
+//   /// Website URL
+//   website String?
+
+//   /// Instagram handle or URL
+//   instagram String?
+
+//   /// Profile image
+//   profileImageUrl String? @map("profile_image_url")
+
+//   /// City / base location (text for MVP simplicity)
+//   city String?
+
+//   /// Country code
+//   countryCode String? @map("country_code")
+
+//   /// Provider metadata (VERY important for flexibility)
+//   ///
+//   /// Examples:
+//   /// Photographer:
+//   /// - editing style
+//   /// - delivery time
+//   ///
+//   /// Coach:
+//   /// - certifications
+//   /// - specialization
+//   ///
+//   /// Physio:
+//   /// - injury focus
+//   metadata Json?
+
+//   /// Provider type relation
+//   type ServiceProviderType @relation(fields: [typeId], references: [id])
+
+//   /// Disciplines this provider specializes in
+//   disciplines ServiceProviderDiscipline[]
+
+//   /// Assignments to events
+//   eventAssignments EventServiceProvider[]
+
+//   /// Media gallery
+//   media ServiceProviderMedia[]
+
+//   createdAt DateTime @default(now()) @map("created_at")
+//   updatedAt DateTime @updatedAt @map("updated_at")
+//   deletedAt DateTime? @map("deleted_at")
+
+//   @@index([typeId])
+//   @@index([slug])
+//   @@index([countryCode])
+//   @@index([city])
+
+//   @@map("service_providers")
+// }
+
+// /// =====================================================
+// /// EVENT SERVICE PROVIDER
+// /// =====================================================
+// /// Links service providers to specific event editions.
+// ///
+// /// Examples:
+// /// - Official photographer for event
+// /// - Recovery partner
+// /// - Nutrition sponsor
+// /// =====================================================
+
+// model EventServiceProvider {
+//   id String @id @default(uuid()) @db.Uuid
+
+//   eventEditionId String @map("event_edition_id") @db.Uuid
+//   providerId String @map("provider_id") @db.Uuid
+
+//   /// Role of provider in event
+//   ///
+//   /// Examples:
+//   /// - official_photographer
+//   /// - recovery_partner
+//   /// - medical_support
+//   /// - coach_guest
+//   role String
+
+//   /// Optional description
+//   description String?
+
+//   /// External link (gallery, landing page, etc.)
+//   externalUrl String? @map("external_url")
+
+//   eventEdition EventEdition @relation(fields: [eventEditionId], references: [id])
+//   provider ServiceProvider @relation(fields: [providerId], references: [id])
+
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   @@index([eventEditionId])
+//   @@index([providerId])
+//   @@index([role])
+
+//   @@unique([eventEditionId, providerId, role])
+
+//   @@map("event_service_providers")
+// }
+
+
+// /// =====================================================
+// /// MEDIA
+// /// =====================================================
+// /// Generic media storage entity used across the platform.
+// ///
+// /// Used for:
+// /// - event images
+// /// - athlete profile images
+// /// - service provider media
+// /// - future photo galleries
+// ///
+// /// Designed to be reusable and scalable.
+// /// =====================================================
+
+// model Media {
+//   /// Primary UUID identifier
+//   id String @id @default(uuid()) @db.Uuid
+
+//   /// Public file URL (CDN or storage provider)
+//   url String
+
+//   /// Media type
+//   ///
+//   /// Examples:
+//   /// - image
+//   /// - video
+//   type String
+
+//   /// Optional alternative text for SEO/accessibility
+//   altText String? @map("alt_text")
+
+//   /// Width in pixels
+//   width Int?
+
+//   /// Height in pixels
+//   height Int?
+
+//   /// File provider (S3, Cloudinary, etc.)
+//   provider String?
+
+//   /// Creation timestamp
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   /// Soft delete timestamp
+//   deletedAt DateTime? @map("deleted_at")
+
+//   @@index([type])
+
+//   @@map("media")
+// }
+
+// /// =====================================================
+// /// SERVICE PROVIDER MEDIA
+// /// =====================================================
+// /// Junction table linking Service Providers to Media.
+// ///
+// /// Allows a provider to have multiple media assets
+// /// such as:
+// /// - portfolio images
+// /// - action shots (photographers)
+// /// - branding material
+// /// - promotional content
+// ///
+// /// This enables scalable galleries per provider.
+// /// =====================================================
+
+// model ServiceProviderMedia {
+//   /// Primary UUID identifier
+//   id String @id @default(uuid()) @db.Uuid
+
+//   /// Reference to service provider
+//   providerId String @map("provider_id") @db.Uuid
+
+//   /// Reference to media asset
+//   mediaId String @map("media_id") @db.Uuid
+
+//   /// Media usage context
+//   ///
+//   /// Examples:
+//   /// - profile
+//   /// - portfolio
+//   /// - cover
+//   /// - gallery
+//   /// - promotional
+//   type String @default("gallery")
+
+//   /// Optional caption or description
+//   caption String?
+
+//   /// Display order inside gallery
+//   ///
+//   /// Useful for:
+//   /// - sorting portfolio images
+//   /// - hero images first
+//   sortOrder Int? @map("sort_order")
+
+//   /// Service provider relation
+//   provider ServiceProvider @relation(fields: [providerId], references: [id])
+
+//   /// Media relation
+//   media Media @relation(fields: [mediaId], references: [id])
+
+//   /// Creation timestamp
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   /// Soft delete timestamp
+//   deletedAt DateTime? @map("deleted_at")
+
+//   /// Prevent duplicate assignment of same media
+//   @@unique([providerId, mediaId])
+
+//   /// Fast provider gallery lookup
+//   @@index([providerId])
+
+//   /// Filter by media type usage
+//   @@index([type])
+
+//   /// Sorting inside provider gallery
+//   @@index([providerId, sortOrder])
+
+//   @@map("service_provider_media")
+// }
+
+// /// =====================================================
+// /// EVENT SERIES MEDIA
+// /// =====================================================
+// /// Links media assets to an EventSeries.
+// ///
+// /// Used for:
+// /// - branding images
+// /// - promotional banners
+// /// - official event photos
+// /// - SEO images
+// /// =====================================================
+
+// model EventSeriesMedia {
+//   /// Primary UUID identifier
+//   id String @id @default(uuid()) @db.Uuid
+
+//   /// Event series reference
+//   eventSeriesId String @map("event_series_id") @db.Uuid
+
+//   /// Media reference
+//   mediaId String @map("media_id") @db.Uuid
+
+//   /// Media usage type
+//   ///
+//   /// Examples:
+//   /// - logo
+//   /// - banner
+//   /// - poster
+//   /// - gallery
+//   type String @default("gallery")
+
+//   /// Optional caption for SEO or UI
+//   caption String?
+
+//   /// Sort order for UI display
+//   sortOrder Int? @map("sort_order")
+
+//   /// Relations
+//   eventSeries EventSeries @relation(fields: [eventSeriesId], references: [id])
+//   media Media @relation(fields: [mediaId], references: [id])
+
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   deletedAt DateTime? @map("deleted_at")
+
+//   @@unique([eventSeriesId, mediaId])
+//   @@index([eventSeriesId])
+//   @@index([type])
+//   @@map("event_series_media")
+// }
+
+// /// =====================================================
+// /// EVENT EDITION MEDIA
+// /// =====================================================
+// /// Media attached to a specific event edition.
+// ///
+// /// Used for:
+// /// - race day photos
+// /// - maps and routes
+// /// - promotional content for that year
+// /// =====================================================
+
+// model EventEditionMedia {
+//   id String @id @default(uuid()) @db.Uuid
+
+//   eventEditionId String @map("event_edition_id") @db.Uuid
+//   mediaId String @map("media_id") @db.Uuid
+
+//   /// Context of media usage
+//   ///
+//   /// Examples:
+//   /// - route_map
+//   /// - banner
+//   /// - gallery
+//   /// - poster
+//   type String @default("gallery")
+
+//   caption String?
+//   sortOrder Int? @map("sort_order")
+
+//   eventEdition EventEdition @relation(fields: [eventEditionId], references: [id])
+//   media Media @relation(fields: [mediaId], references: [id])
+
+//   createdAt DateTime @default(now()) @map("created_at")
+//   deletedAt DateTime? @map("deleted_at")
+
+//   @@unique([eventEditionId, mediaId])
+//   @@index([eventEditionId])
+//   @@index([type])
+//   @@map("event_edition_media")
+// }
+
+// /// =====================================================
+// /// ATHLETE MEDIA
+// /// =====================================================
+// /// Links media assets to an Athlete.
+// ///
+// /// Used for:
+// /// - profile pictures
+// /// - race photos
+// /// - social media images
+// /// =====================================================
+
+// model AthleteMedia {
+//   id String @id @default(uuid()) @db.Uuid
+
+//   athleteId String @map("athlete_id") @db.Uuid
+//   mediaId String @map("media_id") @db.Uuid
+
+//   /// Context of media
+//   ///
+//   /// Examples:
+//   /// - profile
+//   /// - race_photo
+//   /// - gallery
+//   type String @default("gallery")
+
+//   caption String?
+//   sortOrder Int? @map("sort_order")
+
+//   athlete Athlete @relation(fields: [athleteId], references: [id])
+//   media Media @relation(fields: [mediaId], references: [id])
+
+//   createdAt DateTime @default(now()) @map("created_at")
+//   deletedAt DateTime? @map("deleted_at")
+
+//   @@unique([athleteId, mediaId])
+//   @@index([athleteId])
+//   @@index([type])
+//   @@map("athlete_media")
+// }
+
+// /// =====================================================
+// /// ORGANIZER MEDIA
+// /// =====================================================
+// /// Media assets linked to an Organizer.
+// ///
+// /// Used for:
+// /// - logos
+// /// - branding
+// /// - promotional material
+// /// =====================================================
+
+// model OrganizerMedia {
+//   id String @id @default(uuid()) @db.Uuid
+
+//   organizerId String @map("organizer_id") @db.Uuid
+//   mediaId String @map("media_id") @db.Uuid
+
+//   /// Media usage type
+//   ///
+//   /// Examples:
+//   /// - logo
+//   /// - banner
+//   /// - gallery
+//   type String @default("gallery")
+
+//   caption String?
+//   sortOrder Int? @map("sort_order")
+
+//   organizer Organizer @relation(fields: [organizerId], references: [id])
+//   media Media @relation(fields: [mediaId], references: [id])
+
+//   createdAt DateTime @default(now()) @map("created_at")
+//   deletedAt DateTime? @map("deleted_at")
+
+//   @@unique([organizerId, mediaId])
+//   @@index([organizerId])
+//   @@index([type])
+//   @@map("organizer_media")
+// }
+
+// /// =====================================================
+// /// TAG
+// /// =====================================================
+// /// Flexible tagging system used across the platform.
+// ///
+// /// Enables:
+// /// - event tagging
+// /// - provider tagging
+// /// - athlete tagging
+// /// - SEO categorization
+// /// =====================================================
+
+// model Tag {
+//   id String @id @default(uuid()) @db.Uuid
+
+//   name String
+//   slug String @unique
+
+//   /// Optional category grouping
+//   category String?
+
+//   /// Relations
+//   eventSeries EventSeriesTag[]
+//   providers ServiceProviderTag[]
+
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   @@index([slug])
+//   @@index([category])
+
+//   @@map("tags")
+// }
+
+// model EventSeriesTag {
+//   id String @id @default(uuid()) @db.Uuid
+
+//   eventSeriesId String @map("event_series_id") @db.Uuid
+//   tagId String @map("tag_id") @db.Uuid
+
+//   eventSeries EventSeries @relation(fields: [eventSeriesId], references: [id])
+//   tag Tag @relation(fields: [tagId], references: [id])
+
+//   @@unique([eventSeriesId, tagId])
+//   @@index([tagId])
+
+//   @@map("event_series_tags")
+// }
+
+// model ServiceProviderTag {
+//   id String @id @default(uuid()) @db.Uuid
+
+//   providerId String @map("provider_id") @db.Uuid
+//   tagId String @map("tag_id") @db.Uuid
+
+//   provider ServiceProvider @relation(fields: [providerId], references: [id])
+//   tag Tag @relation(fields: [tagId], references: [id])
+
+//   @@unique([providerId, tagId])
+//   @@index([tagId])
+
+//   @@map("service_provider_tags")
+// }
+
+// /// =====================================================
+// /// USER
+// /// =====================================================
+// /// Platform user (future authentication layer).
+// ///
+// /// Used for:
+// /// - favorites
+// /// - saved events
+// /// - saved providers
+// /// - future bookings
+// /// =====================================================
+
+// model User {
+//   id String @id @default(uuid()) @db.Uuid
+
+//   email String? @unique
+//   name String?
+
+//   favorites Favorite[]
+
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   @@map("users")
+// }
+
+// /// =====================================================
+// /// FAVORITE
+// /// =====================================================
+// /// Generic user favorites system.
+// ///
+// /// Allows users to save:
+// /// - events
+// /// - athletes
+// /// - providers
+// /// =====================================================
+
+// model Favorite {
+//   id String @id @default(uuid()) @db.Uuid
+
+//   userId String @map("user_id") @db.Uuid
+
+//   /// Entity type being favorited
+//   ///
+//   /// Examples:
+//   /// - event_series
+//   /// - athlete
+//   /// - service_provider
+//   entityType String @map("entity_type")
+
+//   /// Entity ID (polymorphic relation)
+//   entityId String @map("entity_id") @db.Uuid
+
+//   user User @relation(fields: [userId], references: [id])
+
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   @@index([userId])
+//   @@index([entityType, entityId])
+
+//   @@unique([userId, entityType, entityId])
+
+//   @@map("favorites")
+// }
+
+// /// =====================================================
+// /// SEO META
+// /// =====================================================
+// /// Centralized SEO metadata for all entities.
+// ///
+// /// Used for:
+// /// - OpenGraph
+// /// - Google indexing
+// /// - social sharing
+// /// =====================================================
+
+// model SeoMeta {
+//   id String @id @default(uuid()) @db.Uuid
+
+//   entityType String @map("entity_type")
+//   entityId String @map("entity_id") @db.Uuid
+
+//   title String?
+//   description String?
+//   imageUrl String? @map("image_url")
+
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   @@index([entityType, entityId])
+//   @@map("seo_meta")
+// }
+
+// model SystemConfig {
+//   id String @id @default(uuid()) @db.Uuid
+
+//   key String @unique
+//   value Json
+
+//   createdAt DateTime @default(now()) @map("created_at")
+
+//   @@map("system_config")
+// }

@@ -1,0 +1,14 @@
+//////////////////////////////////////////////////////////
+// REQUIRE ENTITY
+//////////////////////////////////////////////////////////
+
+export function requireEntity<T>(
+  entity: T | null,
+  message: string
+): T {
+  if (!entity) {
+    throw new Error(message);
+  }
+
+  return entity;
+}
