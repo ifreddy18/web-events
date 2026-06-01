@@ -1,3 +1,36 @@
+## Architecture
+```
+apps/web/
+├── app/
+├── prisma/
+├── public/
+├── src/
+│   ├── components/
+│   ├── features/
+│   ├── hooks/
+│   ├── lib/
+│   ├── server/
+│   ├── styles/
+│   ├── types/
+│   └── utils/
+│
+├── package.json
+├── tsconfig.json
+└── next.config.ts
+```
+
+In features folder
+```
+features/events/
+├── components/
+├── actions/
+├── schemas/
+├── queries/
+├── utils/
+├── types/
+└── constants/
+```
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started

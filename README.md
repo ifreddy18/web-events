@@ -1,3 +1,4 @@
+```
 web-events/
 │
 ├── apps/
@@ -14,6 +15,7 @@ web-events/
 ├── .github/
 │
 └── README.md
+```
 
 ¿Por qué esta estructura?
 
