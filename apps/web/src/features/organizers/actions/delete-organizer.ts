@@ -1,12 +1,18 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+
 import { prisma } from "@/server/db/prisma";
 
-export async function updateOrganizer(id: string) {
+export async function deleteOrganizer(id: string) {
 	await prisma.organizer.update({
-		where: { id },
+		where: {
+			id,
+		},
 		data: {
-			isActive: false,
+			deletedAt: new Date(),
 		},
 	});
+
+	revalidatePath("/admin/organizers");
 }
