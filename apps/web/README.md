@@ -1,4 +1,5 @@
 ## Architecture
+
 ```
 apps/web/
 ├── app/
@@ -20,6 +21,7 @@ apps/web/
 ```
 
 In features folder
+
 ```
 features/events/
 ├── components/

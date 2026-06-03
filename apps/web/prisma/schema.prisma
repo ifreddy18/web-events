@@ -960,7 +960,6 @@ model EventResource {
   @@index([serviceProviderId])
   @@index([type])
   @@index([provider])
-
   @@map("event_resources")
 }
 
