@@ -4,7 +4,7 @@ import { useTransition, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import {
 
 import { createOrganizer } from "../actions/create-organizer";
 import { updateOrganizer } from "../actions/update-organizer";
+import { FormError } from "@/components/form/form-error";
 
 type OrganizerFormProps = Readonly<{
 	defaultValues?: Partial<OrganizerFormValues>;
@@ -46,15 +47,8 @@ export function OrganizerForm({
 		},
 	});
 
-	const name = form.watch("name");
-	const slug = form.watch("slug");
+	const name = useWatch({ control: form.control, name: "name" });
 	const slugTouched = form.formState.dirtyFields.slug;
-
-	useEffect(() => {
-		if (!slug) {
-			form.setValue("slug", generateSlug(name));
-		}
-	}, [name, slug, form]);
 
 	useEffect(() => {
 		if (!slugTouched) {
@@ -91,9 +85,7 @@ export function OrganizerForm({
 
 				<Input {...form.register("name")} />
 
-				<p className="mt-1 text-sm text-red-500">
-					{form.formState.errors.name?.message}
-				</p>
+				<FormError message={form.formState.errors.name?.message} />
 			</div>
 
 			<div>
@@ -103,9 +95,7 @@ export function OrganizerForm({
 
 				<Input {...form.register("slug")} />
 
-				<p className="mt-1 text-sm text-red-500">
-					{form.formState.errors.slug?.message}
-				</p>
+				<FormError message={form.formState.errors.slug?.message} />
 			</div>
 
 			<div>
@@ -123,9 +113,7 @@ export function OrganizerForm({
 
 				<Input {...form.register("website")} />
 
-				<p className="mt-1 text-sm text-red-500">
-					{form.formState.errors.website?.message}
-				</p>
+				<FormError message={form.formState.errors.website?.message} />
 			</div>
 
 			<div>
@@ -143,9 +131,7 @@ export function OrganizerForm({
 
 				<Input {...form.register("logoUrl")} />
 
-				<p className="mt-1 text-sm text-red-500">
-					{form.formState.errors.logoUrl?.message}
-				</p>
+				<FormError message={form.formState.errors.logoUrl?.message} />
 			</div>
 
 			{serverError && <p className="text-sm text-red-500">{serverError}</p>}

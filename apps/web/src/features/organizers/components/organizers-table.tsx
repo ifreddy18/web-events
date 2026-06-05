@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 
 import { DeleteOrganizerButton } from "./delete-organizer-button";
+import { EmptyState } from "@/components/admin/empty-state";
 
 interface Organizer {
 	id: string;
@@ -25,13 +26,10 @@ type OrganizersTableProps = Readonly<{
 export function OrganizersTable({ organizers }: OrganizersTableProps) {
 	if (organizers.length === 0) {
 		return (
-			<div className="rounded-lg border p-10 text-center">
-				<h3 className="font-semibold">No organizers yet</h3>
-
-				<p className="mt-2 text-sm text-muted-foreground">
-					Create your first organizer.
-				</p>
-			</div>
+			<EmptyState
+				title="No organizers yet"
+				description="Create your first organizer."
+			/>
 		);
 	}
 
