@@ -1,6 +1,3 @@
-import Link from "next/link";
-
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/admin/page-header";
 import { OrganizersTable } from "@/features/organizers/components/organizers-table";
@@ -13,11 +10,10 @@ export default async function OrganizersPage() {
 		<div>
 			<PageHeader
 				title="Organizers"
-				action={
-					<Button asChild>
-						<Link href="/admin/organizers/new">Create Organizer</Link>
-					</Button>
-				}
+				action={{
+					label: "Create Organizer",
+					href: "/admin/organizers/new",
+				}}
 			></PageHeader>
 
 			<Card>

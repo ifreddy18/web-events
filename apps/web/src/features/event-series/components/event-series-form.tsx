@@ -29,7 +29,7 @@ import { createEventSeries } from "../actions/create-event-series";
 import { updateEventSeries } from "../actions/update-event-series";
 import { Combobox } from "@/components/form/combobox";
 import { FormError } from "@/components/form/form-error";
-import { EVENT_SERIES_STATUS_OPTIONS } from "../constants/event-series-status";
+import { EVENT_SERIES_STATUS_OPTIONS } from "@/constants/event-series-status";
 
 type EventSeriesFormProps = Readonly<{
 	defaultValues?: Partial<EventSeriesFormValues>;

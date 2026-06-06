@@ -1,6 +1,3 @@
-import Link from "next/link";
-
-import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/page-header";
 
 import { getEventSeries } from "@/features/event-series/queries/get-event-series";
@@ -13,11 +10,10 @@ export default async function EventSeriesPage() {
 		<div className="space-y-6">
 			<PageHeader
 				title="Event Series"
-				action={
-					<Button asChild>
-						<Link href="/admin/event-series/new">New Event Series</Link>
-					</Button>
-				}
+				action={{
+					label: "New Event Series",
+					href: "/admin/event-series/new",
+				}}
 			></PageHeader>
 
 			<EventSeriesTable eventSeries={eventSeries} />
