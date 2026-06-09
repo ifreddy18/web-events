@@ -3,8 +3,6 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
-
 import { deleteOrganizer } from "../actions/delete-organizer";
 
 type DeleteOrganizerButtonProps = Readonly<{
@@ -31,14 +29,13 @@ export function DeleteOrganizerButton({
 	}
 
 	return (
-		<Button
+		<button
 			type="button"
-			variant="destructive"
-			size="sm"
-			disabled={isPending}
 			onClick={handleDelete}
+			disabled={isPending}
+			className="text-sm text-red-500 cursor-pointer"
 		>
-			Delete
-		</Button>
+			{isPending ? "Deleting..." : "Delete"}
+		</button>
 	);
 }

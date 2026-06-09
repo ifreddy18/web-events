@@ -39,5 +39,4 @@ export async function updateOrganizer(id: string, values: OrganizerFormValues) {
 	}
 
 	revalidatePath("/admin/organizers");
-	revalidatePath(`/admin/organizers/${id}/edit`);
 }

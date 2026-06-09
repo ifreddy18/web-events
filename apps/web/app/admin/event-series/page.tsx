@@ -1,3 +1,4 @@
+import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/admin/page-header";
 
 import { getEventSeries } from "@/features/event-series/queries/get-event-series";
@@ -16,7 +17,11 @@ export default async function EventSeriesPage() {
 				}}
 			></PageHeader>
 
-			<EventSeriesTable eventSeries={eventSeries} />
+			<Card>
+				<CardContent className="pt-6">
+					<EventSeriesTable eventSeries={eventSeries} />
+				</CardContent>
+			</Card>
 		</div>
 	);
 }

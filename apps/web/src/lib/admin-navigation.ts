@@ -17,6 +17,11 @@ export const adminNavigation = [
 		icon: CalendarDays,
 	},
 	{
+		title: "Event Editions",
+		href: "/admin/event-editions",
+		icon: CalendarDays,
+	},
+	{
 		title: "Locations",
 		href: "/admin/locations",
 		icon: MapPin,

@@ -9,8 +9,17 @@ export function StatusBadge({ status }: StatusBadgeProps) {
 		case "ACTIVE":
 			return <Badge>Active</Badge>;
 
+		case "PUBLISHED":
+			return <Badge>Published</Badge>;
+
+		case "COMPLETED":
+			return <Badge>Completed</Badge>;
+
 		case "ARCHIVED":
 			return <Badge variant="secondary">Archived</Badge>;
+
+		case "DRAFT":
+			return <Badge variant="outline">Draft</Badge>;
 
 		case "CANCELLED":
 			return <Badge variant="destructive">Cancelled</Badge>;
