@@ -1,0 +1,702 @@
+// Sports Events Platform — Prisma schema proposal v2.2 (PostgreSQL, Prisma 6)
+// DESIGN PROPOSAL ONLY. No migrations, database or CRUDs changed.
+// Companion: schema_v2_2_decisions.md and schema_v2_2_constraints.sql.
+// Editorial rules: EventEditionOrganizer is authoritative for event queries;
+// EventSeriesOrganizer is a creation template; same-year editions are allowed.
+// EventResource stores external links; no gallery images are hosted by the platform.
+// Sport-specific metrics live in Competition.metadata (JSONB), not duplicate columns.
+// Local dates and optional HH:mm times are canonical (no duplicate full timestamps).
+// Supplementary PostgreSQL constraints: schema_v2_2_constraints.sql (manual migration step).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EventSeriesStatus {
+  ACTIVE
+  ARCHIVED
+  CANCELLED
+}
+
+enum EventEditionStatus {
+  SCHEDULED
+  POSTPONED
+  COMPLETED
+  CANCELLED
+}
+
+enum CompetitionStatus {
+  ACTIVE
+  CANCELLED
+  COMPLETED
+}
+
+enum EventResourceType {
+  PHOTO_GALLERY
+  VIDEO
+  RESULTS
+  REGISTRATION
+  LIVE_TRACKING
+  OFFICIAL_WEBSITE
+  SOCIAL_POST
+  OTHER
+}
+
+enum ResourceProvider {
+  GOOGLE_DRIVE
+  GOOGLE_PHOTOS
+  DROPBOX
+  PIXIESET
+  SMUGMUG
+  FLICKR
+  YOUTUBE
+  INSTAGRAM
+  VIMEO
+  STRAVA
+  GARMIN
+  WEBSITE
+  OTHER
+}
+
+enum ResultStatus {
+  FINISHED
+  DNF
+  DNS
+  DQ
+}
+
+enum ServiceProviderRole {
+  PHOTOGRAPHER
+  VIDEOGRAPHER
+  RECOVERY_PARTNER
+  MEDICAL_SUPPORT
+  COACH_GUEST
+  OTHER
+}
+
+enum FavoriteEntityType {
+  EVENT_SERIES
+  ATHLETE
+  SERVICE_PROVIDER
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+// Retained from v1: ServiceProviderMedia.type and its existing seed values.
+// Other media junctions intentionally keep their existing String type.
+enum MediaUsageType {
+  PROFILE
+  COVER
+  GALLERY
+  BANNER
+  POSTER
+  LOGO
+  ROUTE_MAP
+  PROMOTIONAL
+  ELEVATION_PROFILE
+  PORTFOLIO
+}
+
+enum PublicationStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum OrganizerRole {
+  PRIMARY
+  CO_ORGANIZER
+}
+
+enum ProviderAccreditation {
+  UNKNOWN
+  OFFICIAL
+  INDEPENDENT
+}
+
+enum RegistrationStatus {
+  UNKNOWN
+  NOT_OPEN
+  OPEN
+  CLOSED
+  SOLD_OUT
+}
+
+enum ParticipationType {
+  COMPETITIVE
+  RECREATIONAL
+}
+
+model Sport {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  slug String @unique
+  description String?
+  disciplines Discipline[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@map("sports")
+}
+
+model Discipline {
+  id String @id @default(uuid()) @db.Uuid
+  sportId String @map("sport_id") @db.Uuid
+  name String
+  slug String @unique
+  description String?
+  metadata Json?
+  sport Sport @relation(fields: [sportId], references: [id])
+  eventSeries EventSeries[]
+  competitions Competition[]
+  providers ServiceProviderDiscipline[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@index([sportId])
+  @@map("disciplines")
+}
+
+model Organizer {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String  @unique
+  description String?
+  website     String?
+  instagram   String?
+  logoUrl     String? @map("logo_url")
+  metadata    Json?
+  seriesAssignments  EventSeriesOrganizer[]
+  editionAssignments EventEditionOrganizer[]
+  media              OrganizerMedia[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@map("organizers")
+}
+
+model Location {
+  id String @id @default(uuid()) @db.Uuid
+  country String
+  state String?
+  city String?
+  venueName String? @map("venue_name")
+  address String?
+  slug String @unique
+  metadata Json?
+  latitude Decimal? @db.Decimal(9, 6)
+  longitude Decimal? @db.Decimal(9, 6)
+  eventEditions EventEdition[] @relation("EditionLocation")
+  competitions Competition[] @relation("CompetitionLocation")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@index([country])
+  @@index([state])
+  @@index([city])
+  @@map("locations")
+}
+
+// EVENTS DOMAIN
+
+model EventSeries {
+  id             String            @id @default(uuid()) @db.Uuid
+  disciplineId   String            @map("discipline_id") @db.Uuid
+  name           String
+  slug           String            @unique
+  description    String?
+  officialWebsite String?          @map("official_website")
+  instagram      String?
+  status         EventSeriesStatus @default(ACTIVE)
+  metadata       Json?
+  discipline Discipline @relation(fields: [disciplineId], references: [id])
+  organizers EventSeriesOrganizer[]
+  editions   EventEdition[]
+  media      EventSeriesMedia[]
+  tags       EventSeriesTag[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@index([disciplineId])
+  @@index([status])
+  @@map("event_series")
+}
+
+model EventSeriesOrganizer {
+  id            String        @id @default(uuid()) @db.Uuid
+  eventSeriesId String        @map("event_series_id") @db.Uuid
+  organizerId   String        @map("organizer_id") @db.Uuid
+  role          OrganizerRole @default(CO_ORGANIZER)
+  eventSeries EventSeries @relation(fields: [eventSeriesId], references: [id])
+  organizer   Organizer   @relation(fields: [organizerId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  // Template only. Actual edition organizer set is authoritative.
+  @@unique([eventSeriesId, organizerId])
+  @@index([organizerId])
+  @@map("event_series_organizers")
+}
+
+model EventEdition {
+  id            String @id @default(uuid()) @db.Uuid
+  eventSeriesId String @map("event_series_id") @db.Uuid
+  locationId    String? @map("location_id") @db.Uuid
+  year          Int
+  name          String
+  slug          String @unique
+  label         String? // e.g. "Primavera", "Edición II"; helps disambiguate same-year slugs
+  // Dates are canonical local calendar dates. Never invent midnight timestamps.
+  // Times are optional local HH:mm strings, validated by Zod + database CHECK.
+  startsOn DateTime? @map("starts_on") @db.Date
+  endsOn   DateTime? @map("ends_on") @db.Date
+  startTime String? @map("start_time") @db.VarChar(5)
+  endTime   String? @map("end_time") @db.VarChar(5)
+  timeZone  String @default("America/Caracas") @map("time_zone")
+  rescheduledFromOn DateTime? @map("rescheduled_from_on") @db.Date
+  registrationOpenAt  DateTime? @map("registration_open_at")
+  registrationCloseAt DateTime? @map("registration_close_at")
+  registrationStatus  RegistrationStatus @default(UNKNOWN) @map("registration_status")
+  // Canonical edition-level registration/results URLs; EventResource stores supplements.
+  registrationUrl     String? @map("registration_url")
+  resultsUrl          String? @map("results_url")
+  publicationStatus PublicationStatus  @default(DRAFT) @map("publication_status")
+  status            EventEditionStatus @default(SCHEDULED)
+  metadata          Json?
+  eventSeries EventSeries @relation(fields: [eventSeriesId], references: [id])
+  location Location? @relation("EditionLocation", fields: [locationId], references: [id])
+  organizers EventEditionOrganizer[]
+  competitions Competition[]
+  eventServiceProviders EventServiceProvider[]
+  eventResources EventResource[]
+  media EventEditionMedia[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  // Never make (eventSeriesId, year) unique: there may be several occurrences.
+  // The admin must generate collision-safe slugs and handle Prisma P2002.
+  @@index([eventSeriesId, year])
+  @@index([publicationStatus, startsOn])
+  @@index([status, startsOn])
+  @@index([locationId, startsOn])
+  @@index([startsOn])
+  @@map("event_editions")
+}
+
+model EventEditionOrganizer {
+  id             String        @id @default(uuid()) @db.Uuid
+  eventEditionId String        @map("event_edition_id") @db.Uuid
+  organizerId    String        @map("organizer_id") @db.Uuid
+  role           OrganizerRole @default(CO_ORGANIZER)
+  eventEdition EventEdition @relation(fields: [eventEditionId], references: [id])
+  organizer    Organizer    @relation(fields: [organizerId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  // At most one PRIMARY is enforced by companion SQL; at least one by application.
+  @@unique([eventEditionId, organizerId])
+  @@index([organizerId])
+  @@map("event_edition_organizers")
+}
+
+model Competition {
+  id             String @id @default(uuid()) @db.Uuid
+  eventEditionId String @map("event_edition_id") @db.Uuid
+  disciplineId   String @map("discipline_id") @db.Uuid
+  locationId     String? @map("location_id") @db.Uuid // Effective location = locationId ?? edition.locationId
+  name           String
+  slug           String
+  description    String?
+  status            CompetitionStatus @default(ACTIVE)
+  participationType ParticipationType @default(COMPETITIVE) @map("participation_type")
+  // Optional overrides. Effective start date = startsOn ?? edition.startsOn.
+  // Effective end date = endsOn ?? effective start date; a multi-day competition
+  // must set endsOn explicitly. Times require a resolvable effective date.
+  // Edition boundaries, date/time ordering and inheritance are validated by a
+  // shared server-side function (see schema_v2_2_decisions.md, item 4).
+  startsOn DateTime? @map("starts_on") @db.Date
+  endsOn   DateTime? @map("ends_on") @db.Date
+  startTime String? @map("start_time") @db.VarChar(5)
+  endTime   String? @map("end_time") @db.VarChar(5)
+  registrationUrl String? @map("registration_url") // Competition-specific override only.
+  // Sport-specific attributes live ONLY here, validated by discipline-specific Zod.
+  // Trail: distanceKm, elevationGainMeters. Triathlon: leg distances. HYROX: divisions.
+  metadata Json?
+  eventEdition EventEdition @relation(fields: [eventEditionId], references: [id])
+  discipline Discipline @relation(fields: [disciplineId], references: [id])
+  location Location? @relation("CompetitionLocation", fields: [locationId], references: [id])
+  results Result[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@unique([eventEditionId, slug])
+  @@index([disciplineId])
+  @@index([locationId])
+  @@index([status])
+  @@index([eventEditionId, startsOn])
+  @@map("competitions")
+}
+
+// EVENT RESOURCE
+
+model EventResource {
+  id          String            @id @default(uuid()) @db.Uuid
+  title       String
+  type        EventResourceType
+  provider    ResourceProvider
+  url         String
+  section     String?
+  description String?
+  metadata    Json?
+  submittedByName      String? @map("submitted_by_name")
+  submittedByInstagram String? @map("submitted_by_instagram")
+  isVerified           Boolean @default(false) @map("is_verified")
+  eventEditionId         String @map("event_edition_id") @db.Uuid
+  eventServiceProviderId String? @map("event_service_provider_id") @db.Uuid
+  eventEdition EventEdition @relation(fields: [eventEditionId], references: [id])
+  eventServiceProvider EventServiceProvider? @relation(fields: [eventServiceProviderId, eventEditionId], references: [id, eventEditionId], onDelete: Restrict)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  // Reuse across editions is allowed, but not twice within the same edition.
+  // Canonical registration/results URLs live on EventEdition; this is for extra links.
+  // Restore soft-deleted duplicates rather than attempting another insert.
+  @@unique([eventEditionId, url])
+  @@index([eventEditionId, type])
+  @@index([eventServiceProviderId])
+  @@index([provider])
+  @@map("event_resources")
+}
+
+model Athlete {
+  id String @id @default(uuid()) @db.Uuid
+  firstName String @map("first_name")
+  lastName String @map("last_name")
+  fullName String @map("full_name")
+  gender String?
+  countryCode String? @map("country_code")
+  birthDate DateTime? @map("birth_date") @db.Date
+  instagram String?
+  bio String?
+  profileImageUrl String? @map("profile_image_url")
+  metadata Json?
+  results Result[]
+  media AthleteMedia[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@index([fullName])
+  @@index([countryCode])
+  @@map("athletes")
+}
+
+model Result {
+  id String @id @default(uuid()) @db.Uuid
+  competitionId String @map("competition_id") @db.Uuid
+  athleteId String @map("athlete_id") @db.Uuid
+  bibNumber String? @map("bib_number")
+  officialTimeSeconds Int? @map("official_time_seconds")
+  chipTimeSeconds Int? @map("chip_time_seconds")
+  overallRank Int? @map("overall_rank")
+  genderRank Int? @map("gender_rank")
+  categoryRank Int? @map("category_rank")
+  status ResultStatus @default(FINISHED)
+  metadata Json?
+  competition Competition @relation(fields: [competitionId], references: [id])
+  athlete Athlete @relation(fields: [athleteId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@unique([competitionId, athleteId])
+  @@index([athleteId, officialTimeSeconds])
+  @@index([competitionId, overallRank])
+  @@index([competitionId, bibNumber])
+  @@index([status])
+  @@map("results")
+}
+
+model ServiceProviderType {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  slug String @unique
+  description String?
+  providers ServiceProviderToType[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@map("service_provider_types")
+}
+
+model ServiceProvider {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  slug String @unique
+  description String?
+  email String?
+  phone String?
+  website String?
+  instagram String?
+  profileImageUrl String? @map("profile_image_url")
+  city String?
+  countryCode String? @map("country_code")
+  metadata Json?
+  providerTypes ServiceProviderToType[]
+  disciplines ServiceProviderDiscipline[]
+  eventAssignments EventServiceProvider[]
+  media ServiceProviderMedia[]
+  tags ServiceProviderTag[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@index([name])
+  @@index([countryCode])
+  @@index([city])
+  @@map("service_providers")
+}
+
+model ServiceProviderToType {
+  id String @id @default(uuid()) @db.Uuid
+  providerId String @map("provider_id") @db.Uuid
+  typeId String @map("type_id") @db.Uuid
+  provider ServiceProvider     @relation(fields: [providerId], references: [id])
+  type     ServiceProviderType @relation(fields: [typeId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([providerId, typeId])
+  @@index([typeId])
+  @@map("service_provider_to_types")
+}
+
+model ServiceProviderDiscipline {
+  id String @id @default(uuid()) @db.Uuid
+  providerId String @map("provider_id") @db.Uuid
+  disciplineId String @map("discipline_id") @db.Uuid
+  provider ServiceProvider @relation(fields: [providerId], references: [id])
+  discipline Discipline @relation(fields: [disciplineId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@unique([providerId, disciplineId])
+  @@index([disciplineId])
+  @@map("service_provider_disciplines")
+}
+
+model EventServiceProvider {
+  id             String @id @default(uuid()) @db.Uuid
+  eventEditionId String @map("event_edition_id") @db.Uuid
+  providerId     String @map("provider_id") @db.Uuid
+  role           ServiceProviderRole
+  accreditation  ProviderAccreditation @default(UNKNOWN)
+  description    String?
+  eventEdition EventEdition @relation(fields: [eventEditionId], references: [id])
+  provider     ServiceProvider @relation(fields: [providerId], references: [id])
+  resources    EventResource[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  // Id + edition is referenced by EventResource to enforce same-edition ownership.
+  // For nested writes with the shared edition FK, prefer explicit scalar IDs + tests.
+  @@unique([id, eventEditionId])
+  @@unique([eventEditionId, providerId, role])
+  @@index([providerId, role])
+  @@index([eventEditionId, role, accreditation])
+  @@map("event_service_providers")
+}
+
+model Media {
+  id String @id @default(uuid()) @db.Uuid
+  url String @unique
+  type MediaType
+  altText String? @map("alt_text")
+  width Int?
+  height Int?
+  provider String?
+  serviceProviderMedia ServiceProviderMedia[]
+  eventSeriesMedia EventSeriesMedia[]
+  eventEditionMedia EventEditionMedia[]
+  athleteMedia AthleteMedia[]
+  organizerMedia OrganizerMedia[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@index([type])
+  @@map("media")
+}
+
+model ServiceProviderMedia {
+  id String @id @default(uuid()) @db.Uuid
+  providerId String @map("provider_id") @db.Uuid
+  mediaId String @map("media_id") @db.Uuid
+  type MediaUsageType @default(GALLERY)
+  caption String?
+  sortOrder Int? @map("sort_order")
+  provider ServiceProvider @relation(fields: [providerId], references: [id])
+  media Media @relation(fields: [mediaId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@unique([providerId, mediaId])
+  @@index([type])
+  @@index([providerId, sortOrder])
+  @@map("service_provider_media")
+}
+
+model EventSeriesMedia {
+  id String @id @default(uuid()) @db.Uuid
+  eventSeriesId String @map("event_series_id") @db.Uuid
+  mediaId String @map("media_id") @db.Uuid
+  type String @default("gallery")
+  caption String?
+  sortOrder Int? @map("sort_order")
+  eventSeries EventSeries @relation(fields: [eventSeriesId], references: [id])
+  media Media @relation(fields: [mediaId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@unique([eventSeriesId, mediaId])
+  @@index([type])
+  @@map("event_series_media")
+}
+
+model EventEditionMedia {
+  id String @id @default(uuid()) @db.Uuid
+  eventEditionId String @map("event_edition_id") @db.Uuid
+  mediaId String @map("media_id") @db.Uuid
+  type String @default("gallery")
+  caption String?
+  sortOrder Int? @map("sort_order")
+  eventEdition EventEdition @relation(fields: [eventEditionId], references: [id])
+  media Media @relation(fields: [mediaId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@unique([eventEditionId, mediaId])
+  @@index([type])
+  @@map("event_edition_media")
+}
+
+model AthleteMedia {
+  id String @id @default(uuid()) @db.Uuid
+  athleteId String @map("athlete_id") @db.Uuid
+  mediaId String @map("media_id") @db.Uuid
+  type String @default("gallery")
+  caption String?
+  sortOrder Int? @map("sort_order")
+  athlete Athlete @relation(fields: [athleteId], references: [id])
+  media Media @relation(fields: [mediaId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@unique([athleteId, mediaId])
+  @@index([type])
+  @@map("athlete_media")
+}
+
+model OrganizerMedia {
+  id String @id @default(uuid()) @db.Uuid
+  organizerId String @map("organizer_id") @db.Uuid
+  mediaId String @map("media_id") @db.Uuid
+  type String @default("gallery")
+  caption String?
+  sortOrder Int? @map("sort_order")
+  organizer Organizer @relation(fields: [organizerId], references: [id])
+  media Media @relation(fields: [mediaId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@unique([organizerId, mediaId])
+  @@index([type])
+  @@map("organizer_media")
+}
+
+// 9.DISCOVERY DOMAIN
+
+model Tag {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  slug String @unique
+  category String?
+  eventSeries EventSeriesTag[]
+  providers ServiceProviderTag[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@index([category])
+  @@map("tags")
+}
+
+model EventSeriesTag {
+  id String @id @default(uuid()) @db.Uuid
+  eventSeriesId String @map("event_series_id") @db.Uuid
+  tagId String @map("tag_id") @db.Uuid
+  eventSeries EventSeries @relation(fields: [eventSeriesId], references: [id])
+  tag Tag @relation(fields: [tagId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@unique([eventSeriesId, tagId])
+  @@index([tagId])
+  @@map("event_series_tags")
+}
+
+model ServiceProviderTag {
+  id String @id @default(uuid()) @db.Uuid
+  providerId String @map("provider_id") @db.Uuid
+  tagId String @map("tag_id") @db.Uuid
+  provider ServiceProvider @relation(fields: [providerId], references: [id])
+  tag Tag @relation(fields: [tagId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@unique([providerId, tagId])
+  @@index([tagId])
+  @@map("service_provider_tags")
+}
+
+model User {
+  id String @id @default(uuid()) @db.Uuid
+  email String? @unique
+  name String?
+  favorites Favorite[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@map("users")
+}
+
+model Favorite {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  entityType FavoriteEntityType @map("entity_type")
+  entityId String @map("entity_id") @db.Uuid
+  user User @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@unique([userId, entityType, entityId])
+  @@index([entityType, entityId])
+  @@map("favorites")
+}
+
+model SeoMeta {
+  id String @id @default(uuid()) @db.Uuid
+  entityType String @map("entity_type")
+  entityId String @map("entity_id") @db.Uuid
+  title String?
+  description String?
+  imageUrl String? @map("image_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@index([entityType, entityId])
+  @@map("seo_meta")
+}
+
+model SystemConfig {
+  id String @id @default(uuid()) @db.Uuid
+  key String @unique
+  value Json
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@map("system_config")
+}
