@@ -17,7 +17,7 @@
 		"db:migrate:test": "node scripts/with-db-env.ts test prisma migrate deploy",
 		"db:studio": "node scripts/with-db-env.ts dev prisma studio",
 		"auth:create-admin": "node scripts/with-db-env.ts dev node --conditions=react-server scripts/create-admin.ts",
-		"db:seed": "echo 'db:seed is a placeholder: no seed implemented yet' && exit 1"
+		"db:seed": "node scripts/with-db-env.ts dev node scripts/seed-catalog.ts"
 	},
 	"dependencies": {
 		"@hookform/resolvers": "^5.4.0",

@@ -54,5 +54,14 @@ tests/{unit,integration,e2e,support}
 ## Definition of Done
 A feature is done when: input is validated by Zod; authorization is enforced server-side; expected errors return `ActionResult`; soft-delete and uniqueness cases are handled; unit tests cover rules and integration tests cover DB behavior; `pnpm typecheck`, `pnpm lint`, `pnpm test` pass; no unrelated files changed; docs updated if conventions or decisions changed.
 
+## Readability and maintainability
+A human must be able to understand, maintain and extend this code without AI help; this is a quality requirement.
+- Use descriptive names for variables, functions, parameters, types and interfaces. No unnecessary abbreviations or generic names (`data`, `item`, `tmp`, `s`); use domain terms (Sport, Discipline, EventSeries, Competition) consistently.
+- Prefer explicit, readable logic over clever one-liners. Keep functions focused and reasonably small.
+- JSDoc for complex business rules, reusable public utilities and non-obvious behavior. Explain *why* (business constraint, architectural decision), not what the code already says; no comments that repeat the code.
+- Document transaction boundaries, concurrency considerations and lock ordering where they apply.
+- Test names describe the expected behavior (`"rejects a duplicate slug within the same discipline"`).
+- Feature documentation: simple features need none. A complex feature gets a concise `README.md` in its folder covering purpose and responsibilities, key business rules, relationships and dependencies, non-obvious decisions, and testing notes. Do not create READMEs unnecessarily.
+
 ## Documentation
 Keep this file short and current. Record a stage's outcome in `docs/architecture/rebuild-plan.md`; record schema decisions only in the decisions doc. Do not duplicate content between docs, and do not commit unless asked.

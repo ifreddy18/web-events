@@ -176,7 +176,7 @@ Each stage ends green (`pnpm ci`) and in one reviewable commit/PR.
 | `db:generate` | `prisma generate` |
 | `db:migrate` / `db:studio` | dev DB only (`.env`, must be `events_dev`) |
 | `db:migrate:test` | `prisma migrate deploy` on `events_test` (`.env.test`) |
-| `db:seed` | placeholder, exits 1 until a seed exists |
+| `db:seed` | idempotent Sport/Discipline catalog seed, `events_dev` only (stage 8.5) |
 
 **Database safety rules.** `tests/support/db-safety.ts` validates `DATABASE_URL` and aborts on failure. Tests require: PostgreSQL URL, host exactly `localhost`/`127.0.0.1` (no `host=` override, no supabase/pooler/cloud markers), database exactly `events_test` (never `events_dev` or `accounting_system*`). `db:*` dev scripts require exactly `events_dev`. `scripts/with-db-env.ts` loads the right env file *overriding* any shell `DATABASE_URL`, validates, then runs the command; the integration setup file and `playwright.config.ts` do the same with `.env.test`. Integration helpers also confirm `current_database()` before cleanup. Fixtures use the `itest-` slug prefix and are removed with prefix-scoped `deleteMany` (children first) before and after the run: no reset, no truncate.
 
@@ -270,7 +270,7 @@ Third admin module. Files: `src/features/event-series/{schemas,rules,queries,act
 **Other decisions**
 - *Duplicates:* same name within the same discipline (case-insensitive, non-deleted) → `conflict`; slug rules as in Organizers (reserved when deleted, never auto-suffixed).
 - *Delete:* soft delete, blocked while active editions exist; assignments are kept as history and a deleted series no longer blocks deleting its organizers.
-- *Lookups:* no Sport/Discipline CRUD. The form lists active disciplines (of active sports) and says to load the catalog seed when none exist (there is no seed yet). Organizer pickers are native `select`/checkboxes, capped at 500 organizers.
+- *Lookups:* no Sport/Discipline CRUD. The form lists active disciplines (of active sports) and says to load the catalog seed when none exist (`pnpm db:seed`). Organizer pickers are native `select`/checkboxes, capped at 500 organizers.
 - *List:* search over name, slug, description, Instagram, discipline, sport and organizer names; filters by status and discipline.
 
 **Tests.** 10 unit (schema, assignment diff, list params) and 24 integration (`events_test`): denial of all actions, create with several co-organizers, validation, deleted/unknown organizers/disciplines/sports, slug/name conflicts, lost-slug-race and rollback, co-organizer add/remove, primary swap/replacement, metadata and row preservation, soft delete and edition block, organizer-delete interplay, search/filters/pagination/counts. E2E adds one flow (validation errors; create with primary + 2 co-organizers; swap primary and edit co-organizers; delete). `scripts/e2e-admin.ts` now also seeds and removes `itest-e2e-` sport, discipline and three organizers. Waits still use `networkidle` for hydration of forms; assertions are element-based.
@@ -279,3 +279,28 @@ Third admin module. Files: `src/features/event-series/{schemas,rules,queries,act
 
 **E2E flakiness risk.** `playwright.config.ts` sets a 60s per-test timeout because the first visit to each route compiles under `next dev`; one cold run after `next build` previously exceeded 30s. Form tests wait for `networkidle` before interacting (hydration). Remaining risk: a very slow cold compile or hydration could still time out; the fix would be running E2E against `next build && next start`.
 
+
+## Stage 8.5 — Sport and Discipline catalog seed (complete)
+
+Files: `prisma/seed/catalog.data.ts` (data), `prisma/seed/catalog.ts` (`seedCatalog(db)`), `scripts/seed-catalog.ts` (runner), `db:seed` in `package.json`. No schema, migration or auth changes; no other business records are touched.
+
+**Catalog (6 sports, 13 disciplines).** Legacy `main_v1` slugs are kept for stability (`running`, `multisport`, `fitness`, `cycling` and their disciplines); swimming and OCR are new.
+- Running: Road Running, Trail Running, Ultra Running
+- Multisport: Triathlon, Duathlon, Aquathlon
+- Cycling: Road Cycling, Mountain Biking
+- Swimming: Pool Swimming, Open Water Swimming
+- Obstacle Course Racing: Obstacle Course Racing (OCR)
+- Fitness: CrossFit, Hyrox
+Distances (5K, 10K, 21K, 42K) are not disciplines; they belong on Competition. Legacy `Discipline.metadata` was not carried over: sport-specific attributes live only in `Competition.metadata`.
+
+**Run:** `pnpm db:seed`. It goes through `scripts/with-db-env.ts dev`, which loads `.env` and runs `assertSafeDevDatabaseUrl` (local host only, database exactly `events_dev`; rejects `events_test`, `accounting_system_*`, Supabase/pooler/remote markers, `host` query overrides). The runner re-validates and checks `current_database()` before writing. It never resets or truncates.
+
+**Behaviour.** One transaction; sports are inserted before disciplines; rows are matched by unique `slug` using `createMany({ skipDuplicates: true })`. Existing rows are never updated (manual edits survive). A soft-deleted sport is left alone and its disciplines are skipped and reported. Output is a created/already-present summary; a rerun creates nothing.
+
+**Adding a discipline:** append it to the matching sport in `catalog.data.ts` (new sport: add a sport entry), pick a permanent kebab-case slug, run `pnpm db:seed`. Existing rows are not renamed by the seed: rename or fix them in the database deliberately. Add a competition metadata schema (`features/competitions/metadata.ts`) only when a feature needs that discipline.
+
+**Tests.** Unit: catalog data (unique/well-formed slugs, required fields, relationships, no distance disciplines) and dev-guard rejections. Integration (`events_test`, `itest-` fixtures with a custom catalog; the dev seed is never executed from tests): relations, idempotency, no overwrite of manual edits, soft-deleted sport handling.
+
+**Verification.** Seed run twice on `events_dev`: first 6/13 created, second 0/0 created; `listDisciplineOptions` query returns all 13 `Sport · Discipline` options.
+
+**Follow-up.** Aquathlon slug standardized to `aquathlon` (the `events_dev` row was renamed after confirming no EventSeries, Competition or provider referenced it). Readability conventions were added to `AGENTS.md`; the seed code got clearer names and transaction/`skipDuplicates` comments. Ultra Running is unchanged for now.

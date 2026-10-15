@@ -36,5 +36,7 @@ describe("assertSafeDevDatabaseUrl", () => {
     expect(() => assertSafeDevDatabaseUrl(url("events_dev"))).not.toThrow()
     expect(() => assertSafeDevDatabaseUrl(url("events_test"))).toThrow()
     expect(() => assertSafeDevDatabaseUrl(url("events_dev", "db.supabase.co"))).toThrow()
+    expect(() => assertSafeDevDatabaseUrl(url("accounting_system_dev"))).toThrow()
+    expect(() => assertSafeDevDatabaseUrl(url("events_dev", "10.0.0.5"))).toThrow()
   })
 })
