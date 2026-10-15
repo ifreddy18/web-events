@@ -12,6 +12,8 @@ const PORT = 3100
 
 export default defineConfig({
   testDir: "tests/e2e",
+  globalSetup: "./tests/e2e/global-setup.ts",
+  globalTeardown: "./tests/e2e/global-teardown.ts",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   reporter: "list",
@@ -24,6 +26,10 @@ export default defineConfig({
     command: `next dev --webpack --port ${PORT}`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: false,
-    env: { DATABASE_URL: databaseUrl },
+    env: {
+      DATABASE_URL: databaseUrl,
+      BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET ?? "",
+      BETTER_AUTH_URL: process.env.BETTER_AUTH_URL ?? `http://localhost:${PORT}`,
+    },
   },
 })

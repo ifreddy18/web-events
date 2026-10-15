@@ -1,22 +1,12 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { AuthorizationError, requireAdmin } from "@/server/auth/session"
+import { denied } from "@/server/auth/admin-guard"
 import { prisma } from "@/server/db/prisma"
 import { fail, fromZodError, hasPrismaCode, ok, validationFailure, type ActionResult } from "@/shared/action-result"
 import { findDuplicateLocation, findSlugOwner } from "./queries"
 import { resolveLocationSlug } from "./rules"
 import { locationIdSchema, locationInputSchema, type LocationInput } from "./schemas"
-
-async function denied() {
-  try {
-    await requireAdmin()
-    return null
-  } catch (e) {
-    if (e instanceof AuthorizationError) return fail(e.code, e.message)
-    throw e
-  }
-}
 
 const slugTaken = (deleted: boolean) =>
   fail(

@@ -237,3 +237,20 @@ First admin module; the pattern for the next ones. Files: `src/features/location
 **Tests.** 10 unit (schemas, slug rules, list params) and 18 integration (`events_test`, `itest-` fixtures; the harness mocks only the request-header source and `revalidatePath`): unauthenticated/non-admin denial for all three actions with no data change, create/derived slug/validation, slug and place duplicates (incl. soft-deleted reservation), update without self-conflict and with metadata preserved, soft delete, usage block, filtering, pagination, usage counts. `cleanupFixtures` now also removes `itest-` locations.
 
 **Verification.** Prisma validate, typecheck, lint, `next build` pass; 61 unit and 47 integration tests pass. Not done: browser/E2E check of the forms and delete dialog.
+
+## Stage 7 — Organizers admin CRUD (complete)
+
+Second admin module, following the Stage 6 pattern. Files: `src/features/organizers/{schemas,rules,queries,actions}.ts`, `components/{organizer-form,organizers-table,delete-organizer-button}.tsx`, routes `app/admin/organizers/{page,loading,new,[id]/edit}`, dashboard link. No schema/migration/auth changes; `metadata` and assignments/media are never touched by the form.
+
+**Shared extraction.** `denied()` moved from Locations to `src/server/auth/admin-guard.ts` (server-only); both modules import it. Nothing else was abstracted (forms/tables stay per feature).
+
+**Decisions**
+- *Fields:* name, slug, description, website, instagram, logoUrl (the model's columns). Website/logo must be http(s) URLs; Instagram accepts `@handle`, handle or profile URL and is stored as the lowercase bare handle.
+- *Slugs:* same rules as Locations (derived from the name when empty, never auto-suffixed, soft-deleted slugs stay reserved, `P2002` handled).
+- *Duplicates:* among non-deleted rows, same name (case-insensitive), same website or same Instagram handle is a `conflict`. Websites are compared as normalized URLs.
+- *Delete:* soft delete, blocked with `conflict` while the organizer is assigned to a non-deleted series or edition; assignments to soft-deleted series/editions are kept. `OrganizerMedia` is not checked (retained with the soft-deleted row).
+- *Search:* name, slug, Instagram, website, description.
+
+**Tests.** 7 unit (schema, slug, list params) and 17 integration (`events_test`): denial of all three actions for unauthenticated/non-admin, normalization, validation, slug/name/website/Instagram conflicts, soft-deleted reservation, update preserving metadata and assignments, soft delete and relation blocking, search, pagination, counts. E2E smoke `tests/e2e/admin-forms.smoke.spec.ts` (see below).
+
+**E2E verification (executed).** `pnpm test:e2e` passes 3/3 on Chromium against `next dev` on port 3100 and `events_test`: unauthenticated redirects to `/login` for admin routes; for both Organizers and Locations, validation errors, create, (organizer) edit, search, delete via the confirmation dialog, and success notices. Setup: `tests/e2e/global-setup.ts` generates a random `itest-e2e-*` admin and password per run (kept only in the process environment, never logged) and creates it through `createUserWithPassword` via `scripts/e2e-admin.ts`; teardown deletes the user (sessions cascade) and leftover `itest-e2e-` organizers/locations. The script and the config both go through `assertSafeTestDatabaseUrl` and verify `current_database()` is `events_test`; the Next server gets that URL plus the test auth secret/URL. A failed setup fails the run (no skip). Finding: interacting before hydration triggers a native form submit / dead buttons, so the spec waits for `networkidle` after navigations. Run `pnpm exec playwright install chromium` once beforehand.

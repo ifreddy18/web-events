@@ -12,6 +12,11 @@ export default function AdminPage() {
             Locations
           </Link>
         </li>
+        <li>
+          <Link href="/admin/organizers" className="underline underline-offset-4">
+            Organizers
+          </Link>
+        </li>
       </ul>
     </div>
   )
