@@ -17,6 +17,11 @@ export default function AdminPage() {
             Organizers
           </Link>
         </li>
+        <li>
+          <Link href="/admin/event-series" className="underline underline-offset-4">
+            Event series
+          </Link>
+        </li>
       </ul>
     </div>
   )

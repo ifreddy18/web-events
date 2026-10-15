@@ -19,9 +19,23 @@ try {
   if (process.argv[2] === "create") {
     if (!password) throw new Error("E2E_ADMIN_PASSWORD is required.")
     await createUserWithPassword({ email, name: "E2E Admin", password, role: "admin" })
+    // Catalog fixtures the series form needs (no seed data exists in events_test).
+    const sport = await db.sport.upsert({ where: { slug: `${PREFIX}sport` }, update: {}, create: { name: "E2E Sport", slug: `${PREFIX}sport` } })
+    await db.discipline.upsert({
+      where: { slug: `${PREFIX}discipline` },
+      update: {},
+      create: { name: "E2E Discipline", slug: `${PREFIX}discipline`, sportId: sport.id },
+    })
+    for (const n of ["Alpha", "Beta", "Gamma"]) {
+      await db.organizer.upsert({ where: { slug: `${PREFIX}org-${n.toLowerCase()}` }, update: {}, create: { name: `E2E Org ${n}`, slug: `${PREFIX}org-${n.toLowerCase()}` } })
+    }
   } else if (process.argv[2] === "cleanup") {
+    await db.eventSeriesOrganizer.deleteMany({ where: { eventSeries: { slug: { startsWith: PREFIX } } } })
+    await db.eventSeries.deleteMany({ where: { slug: { startsWith: PREFIX }, editions: { none: {} } } })
     await db.organizer.deleteMany({ where: { slug: { startsWith: PREFIX }, seriesAssignments: { none: {} }, editionAssignments: { none: {} } } })
     await db.location.deleteMany({ where: { slug: { startsWith: PREFIX }, eventEditions: { none: {} }, competitions: { none: {} } } })
+    await db.discipline.deleteMany({ where: { slug: `${PREFIX}discipline`, eventSeries: { none: {} } } })
+    await db.sport.deleteMany({ where: { slug: `${PREFIX}sport`, disciplines: { none: {} } } })
     await db.user.deleteMany({ where: { email } }) // sessions and accounts cascade
   } else {
     throw new Error("Usage: e2e-admin.ts create|cleanup")

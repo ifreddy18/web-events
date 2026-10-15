@@ -15,6 +15,7 @@ export default defineConfig({
   globalSetup: "./tests/e2e/global-setup.ts",
   globalTeardown: "./tests/e2e/global-teardown.ts",
   fullyParallel: false,
+  timeout: 60_000, // first visits compile pages on demand under next dev
   forbidOnly: !!process.env.CI,
   reporter: "list",
   use: {

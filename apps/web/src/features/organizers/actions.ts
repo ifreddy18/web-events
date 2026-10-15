@@ -75,6 +75,9 @@ export async function deleteOrganizer(id: unknown): Promise<ActionResult> {
   if (!parsedId.success) return fail("not_found", "Organizer not found.")
 
   return prisma.$transaction(async (tx) => {
+    // Row lock pairs with the share lock taken when assigning organizers to a series, so an
+    // assignment and this delete cannot both succeed against a stale count.
+    await tx.$queryRaw`SELECT id FROM organizers WHERE id = ${parsedId.data}::uuid FOR UPDATE`
     const o = await tx.organizer.findFirst({
       where: { id: parsedId.data, deletedAt: null },
       select: {

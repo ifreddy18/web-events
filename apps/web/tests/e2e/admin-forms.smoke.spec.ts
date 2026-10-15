@@ -12,7 +12,7 @@ const hydrated = (page: Page) => page.waitForLoadState("networkidle")
 const run = `itest-e2e-${Date.now()}`
 
 test("unauthenticated visitors are redirected to login", async ({ page }) => {
-  for (const path of ["/admin", "/admin/organizers", "/admin/locations/new"]) {
+  for (const path of ["/admin", "/admin/organizers", "/admin/locations/new", "/admin/event-series", "/admin/event-series/new"]) {
     await page.goto(path)
     await expect(page).toHaveURL(/\/login/)
   }
@@ -75,5 +75,46 @@ test("location: validation, create, delete", async ({ page }) => {
   await page.getByRole("button", { name: /^Delete / }).click()
   await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click()
   await expect(page.getByRole("status")).toHaveText("Location deleted.")
+})
+
+test("event series: validation, primary + co-organizers, edit assignments", async ({ page }) => {
+  const name = `${run} Series`
+  await page.goto("/admin/event-series/new")
+  await hydrated(page)
+  await page.getByRole("button", { name: "Create series" }).click()
+  await expect(page.getByText("Name is required.")).toBeVisible()
+  await expect(page.getByText("Select a discipline.")).toBeVisible()
+  await expect(page.getByText("Select a primary organizer.")).toBeVisible()
+
+  await page.getByRole("textbox", { name: "Name" }).fill(name)
+  await page.getByLabel("Discipline").selectOption({ label: "E2E Sport · E2E Discipline" })
+  await page.getByLabel("Primary organizer").selectOption({ label: "E2E Org Alpha" })
+  await page.getByLabel("E2E Org Beta").check()
+  await page.getByLabel("E2E Org Gamma").check()
+  await page.getByRole("button", { name: "Create series" }).click()
+  await expect(page.getByRole("status")).toHaveText("Series created.")
+
+  await page.getByLabel("Search series").fill(run)
+  await page.getByRole("button", { name: "Search" }).click()
+  const row = page.getByRole("row", { name: new RegExp(name) })
+  await expect(row).toContainText("E2E Org Alpha +2")
+  await row.getByRole("link", { name: "Edit" }).click()
+  await expect(page.getByLabel("Primary organizer")).toHaveValue(/.+/)
+  await hydrated(page)
+
+  // Promote Beta to primary; Alpha becomes a candidate again (primary is excluded from co-organizers).
+  await page.getByLabel("Primary organizer").selectOption({ label: "E2E Org Beta" })
+  await page.getByLabel("E2E Org Gamma").uncheck()
+  await page.getByLabel("E2E Org Alpha").check()
+  await page.getByRole("button", { name: "Save changes" }).click()
+  await expect(page.getByRole("status")).toHaveText("Series updated.")
+
+  await page.getByLabel("Search series").fill(run)
+  await page.getByRole("button", { name: "Search" }).click()
+  await expect(page.getByRole("row", { name: new RegExp(name) })).toContainText("E2E Org Beta +1")
+
+  await page.getByRole("button", { name: `Delete ${name}` }).click()
+  await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click()
+  await expect(page.getByRole("status")).toHaveText("Series deleted.")
 })
 })

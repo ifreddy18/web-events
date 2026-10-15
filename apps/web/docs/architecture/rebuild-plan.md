@@ -254,3 +254,28 @@ Second admin module, following the Stage 6 pattern. Files: `src/features/organiz
 **Tests.** 7 unit (schema, slug, list params) and 17 integration (`events_test`): denial of all three actions for unauthenticated/non-admin, normalization, validation, slug/name/website/Instagram conflicts, soft-deleted reservation, update preserving metadata and assignments, soft delete and relation blocking, search, pagination, counts. E2E smoke `tests/e2e/admin-forms.smoke.spec.ts` (see below).
 
 **E2E verification (executed).** `pnpm test:e2e` passes 3/3 on Chromium against `next dev` on port 3100 and `events_test`: unauthenticated redirects to `/login` for admin routes; for both Organizers and Locations, validation errors, create, (organizer) edit, search, delete via the confirmation dialog, and success notices. Setup: `tests/e2e/global-setup.ts` generates a random `itest-e2e-*` admin and password per run (kept only in the process environment, never logged) and creates it through `createUserWithPassword` via `scripts/e2e-admin.ts`; teardown deletes the user (sessions cascade) and leftover `itest-e2e-` organizers/locations. The script and the config both go through `assertSafeTestDatabaseUrl` and verify `current_database()` is `events_test`; the Next server gets that URL plus the test auth secret/URL. A failed setup fails the run (no skip). Finding: interacting before hydration triggers a native form submit / dead buttons, so the spec waits for `networkidle` after navigations. Run `pnpm exec playwright install chromium` once beforehand.
+
+## Stage 8 — EventSeries admin CRUD (complete)
+
+Third admin module. Files: `src/features/event-series/{schemas,rules,queries,actions}.ts`, `components/{event-series-form,event-series-table,delete-event-series-button}.tsx`, routes `app/admin/event-series/{page,loading,new,[id]/edit}`, dashboard link, `src/shared/field-schemas.ts`. No schema/migration/auth changes. The approved `EventSeries` model has no location column, so none is offered; `metadata` is never read or written by the form.
+
+**Shared extraction.** `clean`, `optionalText`, `optionalUrl`, `instagramHandle` moved from the organizers schema to `src/shared/field-schemas.ts` (features may not import each other); Organizers now imports them. Locations keeps its own copies (untouched).
+
+**Organizer assignments (`EventSeriesOrganizer`, a template for future editions)**
+- The form sends one PRIMARY (required) and 0–20 CO_ORGANIZERs; the same organizer twice (including primary also as co-organizer) is a validation error. All organizers, the discipline and its sport must exist and be non-deleted.
+- Updates diff against current rows (`rules.diffAssignments`) and apply remove → demote → promote → add, so the DB's one-PRIMARY partial unique index is never violated and untouched rows keep their ids/`createdAt`.
+- Everything runs in one transaction. The series row is locked `FOR UPDATE` (serializes edits/deletes), organizers are locked `FOR SHARE` and re-checked as active. `deleteOrganizer` now takes `FOR UPDATE` on the organizer before counting assignments, so "assign" and "delete organizer" cannot both pass on a stale check. Series fields are written last, so a slug `P2002` rolls back assignment changes too. `P2002`/`P2003` map to `conflict`.
+- Future EventEdition creation must take the same `FOR UPDATE` lock on its series and copy the template; edition organizers then stand alone.
+
+**Other decisions**
+- *Duplicates:* same name within the same discipline (case-insensitive, non-deleted) → `conflict`; slug rules as in Organizers (reserved when deleted, never auto-suffixed).
+- *Delete:* soft delete, blocked while active editions exist; assignments are kept as history and a deleted series no longer blocks deleting its organizers.
+- *Lookups:* no Sport/Discipline CRUD. The form lists active disciplines (of active sports) and says to load the catalog seed when none exist (there is no seed yet). Organizer pickers are native `select`/checkboxes, capped at 500 organizers.
+- *List:* search over name, slug, description, Instagram, discipline, sport and organizer names; filters by status and discipline.
+
+**Tests.** 10 unit (schema, assignment diff, list params) and 24 integration (`events_test`): denial of all actions, create with several co-organizers, validation, deleted/unknown organizers/disciplines/sports, slug/name conflicts, lost-slug-race and rollback, co-organizer add/remove, primary swap/replacement, metadata and row preservation, soft delete and edition block, organizer-delete interplay, search/filters/pagination/counts. E2E adds one flow (validation errors; create with primary + 2 co-organizers; swap primary and edit co-organizers; delete). `scripts/e2e-admin.ts` now also seeds and removes `itest-e2e-` sport, discipline and three organizers. Waits still use `networkidle` for hydration of forms; assertions are element-based.
+
+**Lock order (reviewed).** Series mutations lock in the order series row (`FOR UPDATE`) → organizer rows (`FOR SHARE`, `ORDER BY id`). Organizer deletion takes only its own organizer row (`FOR UPDATE`) and then reads counts without locks, and never touches series rows, so there is no lock cycle; concurrent series transactions only take compatible share locks on organizers. Any future code that locks both must keep series → organizer.
+
+**E2E flakiness risk.** `playwright.config.ts` sets a 60s per-test timeout because the first visit to each route compiles under `next dev`; one cold run after `next build` previously exceeded 30s. Form tests wait for `networkidle` before interacting (hydration). Remaining risk: a very slow cold compile or hydration could still time out; the fix would be running E2E against `next build && next start`.
+
