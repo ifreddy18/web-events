@@ -1,0 +1,183 @@
+# Rebuild plan — Sports events platform (clean foundation)
+
+## Progress
+
+- **Stage 1 done:** local PostgreSQL 17 (Homebrew), databases `events_dev` / `events_test`, `.env` / `.env.test` (ignored) + `.env.example`, v1 admin/features code removed (v1 preserved in `main_v1`).
+- **Stage 2 done:** `prisma/schema.prisma` = approved v2.2; v1 migrations, seeds and fixtures removed (recover via `git show main_v1:<path>`); single initial migration `prisma/migrations/20261014000000_init` = `prisma migrate diff` output + appended `schema_v2_2_constraints.sql` (30 tables, 36 FKs, 9 CHECKs, 2 partial unique indexes). Applied with `migrate deploy` to both DBs; schemas identical; Prisma Client 6.19.3 generated. `dotenv` added as a direct dependency; `package.json#prisma` seed config removed. Still open: composite-FK write test on `EventResource`, test-DB guard, Vitest/Playwright, `src/types/metadata` (v1 reference) and `src/server/db/prisma.tsx` rename.
+- **Stage 3 done:** Vitest + Playwright foundation, test-DB safety guard, integration tests, pnpm pinned (see "Stage 3" at the end). `prisma.tsx` renamed to `prisma.ts`; guard and composite-FK test resolved.
+
+**Status:** Proposal, nothing applied. Baseline: `main` @ `c4d8605` (Prisma v2.2 docs approved); v1 preserved on `main_v1`.
+**Inputs inspected:** `apps/web` tree, `package.json`, configs (`prisma.config.ts`, `tsconfig.json`, `components.json`, `next.config.ts`), `src/server/db/prisma.tsx`, v2.2 proposal files (`schema_v2_2.prisma`, `_decisions.md`, `_constraints.sql`).
+
+## Findings from inspection
+
+- Layout: git root contains `README.md`, `docs/roadmap.md`, `apps/web` (single app, no workspace file). pnpm lockfile lives in `apps/web`.
+- Stack present: Next 16.2.6, React 19.2, Prisma 6 (`prisma-client-js`), Zod 4, RHF 7 + resolvers, Tailwind 4, shadcn (`radix-nova`, `rsc: false`), pg, tanstack table.
+- **Missing:** Vitest, Playwright, any auth, `.env`/`.env.example`, Docker (not installed). Local `psql` 17.11 via Homebrew is available.
+- `prisma/schema.prisma` + 5 migrations are v1 (superseded by v2.2). `prisma.config.ts` reads `DATABASE_URL` through `dotenv/config` (`dotenv` is not a direct dependency; it works only transitively — add it).
+- `dev` script uses `next dev --webpack`; reason unknown (check against v1 history before keeping).
+- v1 has 5 admin CRUDs (organizers, locations, event-series, event-editions, competitions) under `src/features/*/{actions,components,queries,schemas}`; the pattern is sound but tied to the v1 schema. `src/types/metadata/*` is sport-specific JSON typing worth reviewing for reuse.
+- `AGENTS.md` instructs reading `node_modules/next/dist/docs/` before writing Next code — follow it in every stage.
+- `shadcn` and `tsx` are in dependencies/devDependencies; `shadcn` CLI belongs in neither at runtime (use `pnpm dlx shadcn`).
+
+## 1. Repository cleanup strategy
+
+Safe because `main_v1` preserves everything. Do it in one commit on a branch `rebuild/foundation` (not on `main` directly), using `git rm`, never `reset`/`clean`.
+
+**Remove (v1-specific):**
+- `prisma/schema.prisma`, `prisma/base_schema copy.prisma`, `prisma/migrations/*`, `prisma/seed.ts`, `prisma/seeds/`, `prisma/utils/`, `prisma/data/` (fixtures reference v1 shapes; rewrite small v2.2 seed later).
+- `app/admin/**` (all v1 routes), `src/features/**`, `src/constants/*-status.ts` (re-derive from Prisma enums), `src/lib/admin-navigation.ts`.
+- `src/components/admin/`, `src/components/form/`, `src/components/layout/` (rebuild alongside first feature; review before deleting for anything generic).
+- `src/types/metadata/**` — **move to a temp reference** (read from `main_v1` when needed) rather than carrying over; v2.2 puts validation in per-discipline Zod schemas.
+- `README.md` sections describing v1; `docs/roadmap.md` — rewrite/update.
+- Dependencies: `@tanstack/react-table`, `cmdk`, `date-fns`, `slugify`, `pg` (Prisma 6 engine does not need it) — re-add only when a stage needs them.
+
+**Keep:**
+- `docs/architecture/**` (untouched), `AGENTS.md`, `CLAUDE.md`.
+- Config: `next.config.ts`, `tsconfig.json`, `eslint.config.mjs`, `postcss.config.mjs`, `components.json`, `.gitignore`, `prisma.config.ts` (path stays `prisma/schema.prisma`).
+- `app/globals.css`, `app/layout.tsx` (review), `public/`.
+- `src/components/ui/*` shadcn primitives (button, card, input, select, dialog, sheet, table, textarea, badge, skeleton, popover, dropdown-menu, input-group, command). Keep only those used by stage 3-4; delete the rest and re-add via CLI.
+- `src/lib/utils.ts` (`cn`), `src/server/db/prisma.tsx` → rename to `prisma.ts` (no JSX).
+
+## 2. Proposed directory structure
+
+Feature-based, minimal layers: `schemas` (Zod, shared client+server), `service` (business rules, pure where possible), `actions` (Server Actions: auth + parse + call service), `queries` (reads), `components`.
+
+```
+apps/web/
+├─ app/
+│  ├─ (public)/                 # future SEO pages: events, series, editions
+│  ├─ admin/
+│  │  ├─ layout.tsx             # server-side auth gate
+│  │  └─ <feature>/page.tsx, new/, [id]/edit/
+│  ├─ api/                      # only if needed (health, webhooks)
+│  ├─ layout.tsx  globals.css
+├─ src/
+│  ├─ features/
+│  │  └─ <feature>/             # organizers, locations, event-series, event-editions, competitions
+│  │     ├─ schemas.ts          # Zod; types via z.infer
+│  │     ├─ rules.ts            # pure business rules (date inheritance, etc.)
+│  │     ├─ queries.ts          # read functions (server-only)
+│  │     ├─ actions.ts          # "use server": requireAdmin → validate → write
+│  │     ├─ components/         # forms, tables
+│  │     └─ *.test.ts           # colocated unit tests
+│  ├─ shared/
+│  │  ├─ metadata/              # per-discipline Zod metadata schemas + registry
+│  │  ├─ dates.ts  slug.ts      # shared helpers (local dates, HH:mm, collision-safe slug)
+│  │  └─ action-result.ts       # { ok, data | fieldErrors } type
+│  ├─ server/
+│  │  ├─ db.ts                  # Prisma singleton
+│  │  ├─ auth.ts                # requireAdmin() / getSession()
+│  │  └─ env.ts                 # Zod-validated process.env
+│  ├─ components/ui/            # shadcn
+│  └─ lib/utils.ts
+├─ prisma/
+│  ├─ schema.prisma             # copy of schema_v2_2.prisma
+│  ├─ migrations/               # 1 initial migration + hand-appended constraints SQL
+│  └─ seed.ts                   # small deterministic fixtures (fixed UUIDs)
+├─ tests/
+│  ├─ integration/              # Vitest + real DB
+│  └─ e2e/                      # Playwright
+├─ docs/architecture/           # approved docs + this plan
+├─ vitest.config.ts  playwright.config.ts  .env.example
+```
+
+Rules: features do not import each other's internals (only `schemas`/types); `server/*` and `queries/actions` import `server-only`; no repository/DTO/service-interface layers.
+
+## 3. Development environment configuration
+
+- **PostgreSQL 17 local via Homebrew** (no Docker installed): `brew services start postgresql@17`.
+- Two databases, same server, never Supabase:
+  - `events_dev` (app)
+  - `events_test` (integration + e2e; reset per run)
+- `.env.example` (committed), `.env` / `.env.test` (ignored; `.gitignore` already has `.env*` — add exception `!.env.example`):
+  ```
+  DATABASE_URL="postgresql://<user>@localhost:5432/events_dev"
+  # test: events_test (separate file, loaded by vitest/playwright)
+  AUTH_SECRET=""            # decision pending, see stage 2
+  ADMIN_EMAILS=""           # decision pending
+  ```
+- Guard: `server/env.ts` + a test-setup check that aborts if `DATABASE_URL` doesn't contain `localhost` and `_test` when running tests (prevents wiping dev/remote DB).
+- Scripts (`package.json`): `dev`, `build`, `lint`, `typecheck` (`tsc --noEmit`), `test`, `test:int`, `test:e2e`, `db:generate`, `db:migrate`, `db:reset`, `db:seed`, `db:test:reset` (`prisma migrate reset --force --skip-seed` against test URL), `ci` (lint+typecheck+test+build).
+- Migration: generate the single initial migration from the v2.2 schema, then append `schema_v2_2_constraints.sql` to that same migration file before applying (Prisma cannot express partial unique indexes/CHECKs). Verify with `prisma validate` and a real write of the composite FK in `EventResource` (decision #7).
+- Revisit `next dev --webpack`; default to Turbopack unless v1 showed a concrete issue.
+
+## 4. Testing strategy
+
+Pyramid, minimal tooling, tests land with the first feature:
+
+1. **Unit (Vitest, node env)** — pure code: Zod schemas, `rules.ts` (date/time inheritance cases from decision #4: competition outside edition window, inverted inherited times, `endsOn` without `startsOn`, midnight-spanning), slug generation, metadata schemas per discipline. Colocated `*.test.ts`. Fast, no DB.
+2. **Integration (Vitest + real Postgres test DB)** — actions/queries and DB constraints: partial unique PRIMARY organizer, CHECK constraints from the SQL file, soft-delete + restore, `P2002` slug collision handling, organizer template → edition copy, EventResource composite FK. Each test file wraps in a transaction or truncates tables; run serially (`pool: forks`, `singleFork`). Mock only `next/cache`/`next/headers`; auth is tested by calling actions with/without a session.
+3. **Authorization tests** — every admin action rejects unauthenticated/non-admin callers (table-driven across all actions) — this is the server-side authorization guarantee.
+4. **E2E (Playwright, Chromium only)** — few critical flows: admin login, create series → edition → competition, validation errors shown, unauthorized redirect, later public page renders with metadata. Runs against `next build && next start` + test DB; seed via `prisma/seed.ts` or API-free DB helper. Smoke only; logic belongs to lower layers.
+5. Component tests (RTL) **not** included in MVP; add only if form logic outgrows e2e.
+
+Conventions: schemas are the single source of truth shared by RHF (`zodResolver`) and Server Actions; actions return `{ok:false, fieldErrors}` instead of throwing for validation. Coverage not gated initially; CI gate is `lint + typecheck + unit + integration`, e2e on main/PR.
+
+## 5. Required dependencies
+
+**Keep:** `next`, `react`, `react-dom`, `@prisma/client@6`, `prisma@6` (dev), `zod`, `react-hook-form`, `@hookform/resolvers`, `tailwindcss`, `@tailwindcss/postcss`, `tw-animate-css`, `class-variance-authority`, `clsx`, `tailwind-merge`, `lucide-react`, `radix-ui`, `typescript`, `eslint`, `eslint-config-next`, `tsx`, `@types/*`.
+
+**Add:**
+- `vitest`, `@vitest/coverage-v8` (optional), `vite-tsconfig-paths` (for `@/` alias)
+- `@playwright/test`
+- `server-only`
+- `dotenv` (explicit; used by `prisma.config.ts`) and `dotenv-cli` or Vitest `env` config for `.env.test`
+- Auth: **decision needed** (see risks). Lowest-dependency option: a single admin identity via signed session cookie using `jose` + password hash (`@node-rs/argon2` or `bcryptjs`) against `User`; heavier option: Auth.js/Better Auth. Recommend the minimal option for a single-admin MVP, behind `requireAdmin()` so it can be swapped.
+
+**Remove:** `shadcn` (use `pnpm dlx`), `pg`, `slugify` (write ~10-line slug helper with transliteration via `String.normalize`), `@tanstack/react-table`, `cmdk`, `date-fns` until needed (dates are `DATE`/`HH:mm` strings; avoid timezone-shifting libs).
+
+## 6. Implementation stages
+
+Each stage ends green (`pnpm ci`) and in one reviewable commit/PR.
+
+1. **Cleanup & tooling baseline.** Branch; remove v1 files; fix deps; add `.env.example`, scripts, strict TS check, Vitest + Playwright configs with one trivial test each; update README/roadmap. *Verify:* `pnpm install`, `lint`, `typecheck`, `test`, `build` pass; app serves a blank home.
+2. **Database foundation.** Local Postgres + dev/test DBs; copy v2.2 schema; initial migration + appended constraints SQL; `server/db.ts`, `server/env.ts`; `db:test:reset`. *Verify:* `prisma validate`, migrate applies on both DBs, integration test asserts CHECKs and partial unique indexes reject bad rows, composite-FK write test.
+3. **Shared core.** `shared/dates.ts`, `slug.ts`, `action-result.ts`, metadata registry (start with 1–2 disciplines), date/time rules module. *Verify:* unit tests covering decision #4 cases.
+4. **Auth & admin shell.** Decide auth approach; `requireAdmin()`; admin layout gate; minimal nav; login page. *Verify:* authorization tests + Playwright unauth redirect + login flow.
+5. **First feature vertical: Locations** (simplest, no parents). schemas → queries → actions → list/new/edit UI; soft delete + restore. Establishes the template. *Verify:* unit + integration + authz tests; one e2e CRUD flow. **Stop and review the pattern before replicating.**
+6. **Organizers** (with metadata validation) — second pass validates the pattern; extract only genuinely duplicated helpers.
+7. **EventSeries** (+ organizer template, status enum).
+8. **EventEditions** (series FK, template→edition organizer copy in transaction, single PRIMARY rules, slug collision, publication vs lifecycle, dates/times). *Verify:* heaviest integration suite.
+9. **Competitions** (date/location inheritance via shared rule, discipline metadata Zod validation).
+10. **Seed & e2e happy path.** Small deterministic v2.2 seed (fixed UUIDs), full create-chain e2e.
+11. **Public read layer (post-MVP admin).** `(public)` routes with Server Components, `generateMetadata`, sitemap/robots, filter `publicationStatus=PUBLISHED` and `deletedAt: null`. Deferred: ServiceProvider/EventResource/Athlete/Result admin.
+
+## 7. Risks and precautions
+
+- **Auth is unspecified** (none in v1; `User` exists in schema). Must be decided before stage 4; all mutations must call `requireAdmin()` inside the action itself — never rely on layout/middleware alone (layouts don't re-run on every Server Action call).
+- **Constraints SQL not Prisma-expressible.** Appending to the initial migration means future `migrate dev` may drift-detect; keep it in the same migration file and document it. Never edit the file after it is applied; use new migrations.
+- **Composite FK on `EventResource`** is flagged "verify before adoption" in the decisions file — test in stage 2 before building on it.
+- **Test DB safety.** Enforce the localhost/`_test` guard; never point tests at Supabase or the dev DB.
+- **Soft deletes.** Every query must filter `deletedAt: null`, including nested relations; centralize in query helpers and cover with tests; restore-vs-create logic for unique slugs/URLs.
+- **Dates.** Use `DATE`/`HH:mm` as strings end to end; avoid `Date` → `toISOString()` shifts (decision #4). Parse Prisma `DATE` values as UTC and format without timezone conversion.
+- **JSON metadata drift.** Registry keyed by discipline; unknown discipline = validation error; version field in metadata if schemas are expected to evolve.
+- **Next 16 differences.** Read `node_modules/next/dist/docs/` for caching/async `params`/`searchParams`/`cookies()` before writing routes, per `AGENTS.md`; Server Actions are public endpoints, validate and authorize every call.
+- **Slug collisions** (`P2002`) are expected (same-year editions allowed); handle with suffix retry in a transaction.
+- **Scope creep.** Defer User registration, Favorites, SeoMeta tooling, media hosting, results, athletes. Do not copy v1 features not in the stage list.
+- **Repo hygiene.** Don't edit approved docs; changes to the schema require a new decisions entry. Do cleanup on a branch; v1 stays recoverable from `main_v1` (reference with `git show main_v1:<path>`).
+- **Open questions:** auth approach; whether `--webpack` is still required; whether to flatten repo (move `apps/web` to root) — recommend keeping as-is for now.
+
+## Stage 3 — Testing and tooling foundation (complete)
+
+**Toolchain.** pnpm 10.34.7 via Corepack, pinned in `packageManager` (the stage-2 lockfile churn came from a different pnpm major; regenerating from the committed lockfile with 10.34.7 yields only the `dotenv` addition). Added: `dotenv` (dependency, used by `prisma.config.ts`), `server-only`, `vitest`, `@playwright/test`. Removed (confirmed unused): `pg`, `tsx`, and the `prisma.seed` hook. Removed the `db:reset` script (`migrate reset` is forbidden). Playwright browsers are **not** installed; run `pnpm exec playwright install chromium` before the first real E2E.
+
+**Commands** (run from `apps/web`)
+
+| Script | Purpose |
+|---|---|
+| `lint`, `typecheck` | ESLint, `tsc --noEmit` |
+| `test` | unit, then integration |
+| `test:unit` | `tests/unit/**`, no database |
+| `test:integration` | `tests/integration/**` against `events_test` (guarded) |
+| `test:e2e` | Playwright (`tests/e2e`, app on port 3100 against `events_test`; passes with no tests) |
+| `db:generate` | `prisma generate` |
+| `db:migrate` / `db:studio` | dev DB only (`.env`, must be `events_dev`) |
+| `db:migrate:test` | `prisma migrate deploy` on `events_test` (`.env.test`) |
+| `db:seed` | placeholder, exits 1 until a seed exists |
+
+**Database safety rules.** `tests/support/db-safety.ts` validates `DATABASE_URL` and aborts on failure. Tests require: PostgreSQL URL, host exactly `localhost`/`127.0.0.1` (no `host=` override, no supabase/pooler/cloud markers), database exactly `events_test` (never `events_dev` or `accounting_system*`). `db:*` dev scripts require exactly `events_dev`. `scripts/with-db-env.ts` loads the right env file *overriding* any shell `DATABASE_URL`, validates, then runs the command; the integration setup file and `playwright.config.ts` do the same with `.env.test`. Integration helpers also confirm `current_database()` before cleanup. Fixtures use the `itest-` slug prefix and are removed with prefix-scoped `deleteMany` (children first) before and after the run: no reset, no truncate.
+
+**Layout.** `src/server/db/prisma.ts` (singleton, `server-only`; stubbed in Vitest via alias), `vitest.config.mts` (unit), `vitest.integration.config.mts` (serial, `.env.test`), `tests/{unit,integration,e2e,support}`.
+
+**Results.** Prisma validate OK; typecheck, lint clean; 15 unit tests (guard) and 16 integration tests pass (connection, same-year editions, one PRIMARY organizer, edition date/time CHECKs, composite-FK rejection, multiple galleries per photographer, duplicate URL per edition rejected, same URL across editions allowed). `events_dev` and `events_test` both accessible with the init migration applied, and `events_test` left empty after runs.
