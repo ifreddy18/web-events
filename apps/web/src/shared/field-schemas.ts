@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { isLocalDate, isLocalTime } from "@/shared/local-date"
 
 // Text field normalizers shared by admin feature schemas.
 
@@ -42,3 +43,34 @@ export const instagramHandle = z
     }
     return raw.toLowerCase()
   })
+
+/** Empty input means "not set" (TBA); anything else must be a real calendar date. */
+export const optionalLocalDate = z
+  .string()
+  .optional()
+  .transform((value, ctx) => {
+    const raw = (value ?? "").trim()
+    if (raw === "") return null
+    if (isLocalDate(raw)) return raw
+    ctx.addIssue({ code: "custom", message: "Use a valid date." })
+    return z.NEVER
+  })
+
+export const optionalLocalTime = z
+  .string()
+  .optional()
+  .transform((value, ctx) => {
+    const raw = (value ?? "").trim()
+    if (raw === "") return null
+    if (isLocalTime(raw)) return raw
+    ctx.addIssue({ code: "custom", message: "Use a valid time (HH:mm)." })
+    return z.NEVER
+  })
+
+export const optionalUuid = (message: string) =>
+  z
+    .string()
+    .optional()
+    .transform((value) => (value ?? "").trim() || null)
+    .pipe(z.uuid(message).nullable())
+

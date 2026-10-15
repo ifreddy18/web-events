@@ -26,13 +26,19 @@ export async function cleanupFixtures(db: PrismaClient) {
   await db.eventServiceProvider.deleteMany({ where: editions })
   await db.eventEditionOrganizer.deleteMany({ where: editions })
   await db.eventSeriesOrganizer.deleteMany({ where: { eventSeries: { slug: like } } })
-  await db.competition.deleteMany({ where: { OR: [{ slug: like }, { location: { slug: like } }] } })
+  const fixtureCompetitions = { OR: [{ slug: like }, { location: { slug: like } }] }
+  await db.result.deleteMany({ where: { competition: fixtureCompetitions } })
+  await db.athlete.deleteMany({ where: { fullName: like } })
+  await db.competition.deleteMany({ where: fixtureCompetitions })
   await db.eventEdition.deleteMany({ where: { slug: like } })
   await db.eventSeries.deleteMany({ where: { slug: like } })
   await db.eventEdition.deleteMany({ where: { location: { slug: like } } })
   await db.location.deleteMany({ where: { slug: like } })
   await db.serviceProvider.deleteMany({ where: { slug: like } })
   await db.organizer.deleteMany({ where: { slug: like } })
+  // Competition metadata is keyed by the real "trail-running" slug, so tests that need it create one
+  // under a prefixed sport; it is only removed here when it hangs off such a sport.
+  await db.discipline.deleteMany({ where: { slug: "trail-running", sport: { slug: like } } })
   await db.discipline.deleteMany({ where: { slug: like } })
   await db.sport.deleteMany({ where: { slug: like } })
   // Sessions and accounts cascade from the user.

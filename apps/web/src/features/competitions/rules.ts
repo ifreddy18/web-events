@@ -1,3 +1,4 @@
+import { generateSlug } from "@/lib/slug"
 import { isLocalDate, isLocalTime, type LocalDate, type LocalTime } from "@/shared/local-date"
 
 // Pure business rules from schema_v2_2_decisions.md, item 4. Used by create/update
@@ -104,7 +105,8 @@ export function validateCompetitionSchedule(
     if (eff.startsOn < edition.startsOn || eff.startsOn > windowEnd) {
       add("startsOn", "outside_edition", "The start date must fall within the edition dates.")
     }
-    if (eff.endsOn !== null && (eff.endsOn > windowEnd || eff.endsOn < edition.startsOn)) {
+    // An inherited end date equals the start date, which was just checked: report only an own end date.
+    if (competition.endsOn !== null && eff.endsOn !== null && (eff.endsOn > windowEnd || eff.endsOn < edition.startsOn)) {
       add("endsOn", "outside_edition", "The end date must fall within the edition dates.")
     }
   }
@@ -115,4 +117,13 @@ export function validateCompetitionSchedule(
   }
 
   return issues
+}
+
+/**
+ * Slug used when the admin leaves it empty. Competition slugs only need to be unique within their
+ * edition, so the name alone is enough ("10K" can exist in every edition). A collision is reported,
+ * never fixed with a suffix.
+ */
+export function deriveCompetitionSlug(name: string) {
+  return generateSlug(name).slice(0, 150).replace(/-+$/, "") || null
 }

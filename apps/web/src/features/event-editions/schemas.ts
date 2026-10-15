@@ -1,7 +1,7 @@
 import { z } from "zod"
 import { generateSlug } from "@/lib/slug"
-import { clean, optionalText, optionalUrl } from "@/shared/field-schemas"
-import { isLocalDate, isLocalDateTime, isLocalTime, isValidTimeZone } from "@/shared/local-date"
+import { clean, optionalLocalDate, optionalLocalTime, optionalText, optionalUrl, optionalUuid } from "@/shared/field-schemas"
+import { isLocalDateTime, isValidTimeZone } from "@/shared/local-date"
 import { validateEditionRules } from "./rules"
 
 export const PUBLICATION_STATUSES = ["DRAFT", "PUBLISHED"] as const
@@ -11,29 +11,6 @@ export const REGISTRATION_STATUSES = ["UNKNOWN", "NOT_OPEN", "OPEN", "CLOSED", "
 export const DEFAULT_TIME_ZONE = "America/Caracas"
 export const MIN_EDITION_YEAR = 1900
 export const MAX_EDITION_YEAR = 2100
-
-/** Empty input means "not set" (TBA); anything else must be a real calendar date. */
-const optionalLocalDate = z
-  .string()
-  .optional()
-  .transform((value, ctx) => {
-    const raw = (value ?? "").trim()
-    if (raw === "") return null
-    if (isLocalDate(raw)) return raw
-    ctx.addIssue({ code: "custom", message: "Use a valid date." })
-    return z.NEVER
-  })
-
-const optionalLocalTime = z
-  .string()
-  .optional()
-  .transform((value, ctx) => {
-    const raw = (value ?? "").trim()
-    if (raw === "") return null
-    if (isLocalTime(raw)) return raw
-    ctx.addIssue({ code: "custom", message: "Use a valid time (HH:mm)." })
-    return z.NEVER
-  })
 
 /** Wall-clock date and time in the edition's time zone; seconds from the browser are dropped. */
 const optionalLocalDateTime = z
@@ -46,13 +23,6 @@ const optionalLocalDateTime = z
     ctx.addIssue({ code: "custom", message: "Use a valid date and time." })
     return z.NEVER
   })
-
-const optionalUuid = (message: string) =>
-  z
-    .string()
-    .optional()
-    .transform((value) => (value ?? "").trim() || null)
-    .pipe(z.uuid(message).nullable())
 
 const editionFields = {
   name: z.string().transform(clean).pipe(z.string().min(1, "Name is required.").max(150, "Must be at most 150 characters.")),

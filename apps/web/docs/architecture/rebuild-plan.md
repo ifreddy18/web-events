@@ -9,6 +9,7 @@
 - **Stage 5 done:** Better Auth admin authentication (see "Stage 5" at the end).
 - **Stages 6–8.5 done:** Locations, Organizers, EventSeries admin CRUD and the catalog seed (see the sections at the end).
 - **Stage 9 done:** EventEdition admin CRUD (see "Stage 9" at the end).
+- **Stage 10 done:** Competition admin CRUD (see "Stage 10" at the end).
 
 **Status:** Proposal, nothing applied. Baseline: `main` @ `c4d8605` (Prisma v2.2 docs approved); v1 preserved on `main_v1`.
 **Inputs inspected:** `apps/web` tree, `package.json`, configs (`prisma.config.ts`, `tsconfig.json`, `components.json`, `next.config.ts`), `src/server/db/prisma.tsx`, v2.2 proposal files (`schema_v2_2.prisma`, `_decisions.md`, `_constraints.sql`).
@@ -194,7 +195,7 @@ Conventions live in `AGENTS.md` (`CLAUDE.md` imports it). Deviations from the or
 - `src/shared/local-date.ts`: `LocalDate`/`LocalTime` string types, validation, `localDateFromDb`/`localDateToDb` (UTC getters, so no timezone shift).
 - `src/shared/action-result.ts`: `ActionResult<T>` (`ok` | `{code, message, fieldErrors}`), `ok`, `fail`, `fromZodError`, `hasPrismaCode` (structural, for `P2002`/`P2003`).
 - `src/features/competitions/rules.ts`: `resolveEffectiveSchedule` and `validateCompetitionSchedule` per decision #4. Returns all issues (`invalid_date`, `invalid_time`, `missing_start_date`, `end_before_start`, `outside_edition`, `time_order`) with the offending field.
-- `src/features/competitions/metadata.ts`: `parseCompetitionMetadata(disciplineSlug, raw)` with one strict Zod schema (`trail-running`: `distanceKm` required, optional elevation/terrain/cutoff/tags/difficulty/beginnerFriendly).
+- `src/features/competitions/metadata.ts`: `parseCompetitionMetadata(disciplineSlug, raw)` with one strict Zod schema (`trail-running`: `distanceKm` required at Stage 4 (optional since Stage 10), optional elevation/terrain/cutoff/tags/difficulty/beginnerFriendly).
 
 **Decisions not covered elsewhere**
 - Competition times are overrides only; they are not inherited from the edition.
@@ -326,4 +327,25 @@ Fourth admin module. Files: `src/features/event-editions/{schemas,rules,queries,
 
 **Limitations.** Series/location/organizer pickers are native selects capped at 500 rows. No restore, no bulk actions, no per-field audit. `COMPLETED` is not checked against today's date. Providers, resources and media have no admin UI yet; their delete blockers are exercised in integration tests with directly created rows.
 
-**Next.** Stage 10: Competition admin (dates/location inherited through `competitions/rules.ts`; must take the edition row `FOR SHARE`).
+
+## Stage 10 — Competition admin CRUD (complete, finalized)
+
+Fifth admin module. Files: `src/features/competitions/{schemas,queries,actions}.ts` (new), `rules.ts` (+`deriveCompetitionSlug`) and `metadata.ts` (extended), `components/{competition-form,competitions-table,delete-competition-button,trail-running-metadata-fields}.tsx`, `README.md`, routes `app/admin/competitions/{page,loading,new,[id]/edit}`, dashboard link. Shared: `optionalLocalDate`/`optionalLocalTime`/`optionalUuid` moved from `event-editions/schemas.ts` to `src/shared/field-schemas.ts`. No schema, migration or auth changes.
+
+**Decisions**
+- *Parent edition:* chosen on create, fixed afterwards (reassigning would need two edition locks, re-scope slug uniqueness and move results); documented in the feature README.
+- *Metadata:* strict per-discipline schema (all Trail Running fields optional, including `distanceKm`, so a race can be created before its course is confirmed; a given distance must be positive) (only `trail-running` so far), validated server-side by discipline slug; disciplines without a schema accept empty metadata only (stored as SQL NULL). `resolveCompetitionMetadata` preserves stored properties the schema does not manage and keeps metadata untouched when the form sends none; changing discipline with stored metadata requires an explicit `discardStoredMetadata` confirmation. The Trail Running form is an explicit component plus a text↔metadata codec (decimal commas, comma lists); no dynamic form engine.
+- *Schedule:* all checks through the existing `rules.ts`, run in the transaction against the edition read after the lock. One small rule fix: an inherited end date outside the edition is no longer reported a second time under "End date" when only the start date is wrong.
+- *Slugs:* unique per edition; derived from the name, never suffixed; soft-deleted slugs stay reserved; `P2002`→conflict, `P2003`→"selection no longer available".
+- *Delete:* soft, blocked only by active Results (the sole table referencing a competition).
+- *Search:* name, slug, edition, series, discipline and the effective location (own, or the edition's when the competition has none).
+
+**Lock order (reviewed).** edition `FOR SHARE` → competition `FOR UPDATE` → location `FOR SHARE`. Edition update/delete keep `FOR UPDATE` on the edition (series → edition → location → organizers), so the only new edge is edition(S) → competition(X) → location(S), consistent with the existing order. Deleting a competition takes only its own row. A mutation check (removing the `FOR SHARE` clauses) makes the three concurrency tests fail. Future Result code must take the competition row `FOR SHARE`.
+
+**Tests.** Unit: 35 new (schemas, metadata resolution and codec, rules). Integration (`events_test`): 82 new covering authorization, create/update/delete, inheritance, schedule rules, metadata (valid, invalid, empty, preservation, discipline change), slugs, rollback after a lost slug race, concurrent edition updates/deletes and location deletes, search/filters/pagination. `cleanupFixtures` now also removes results, `itest-` athletes and a `trail-running` discipline hanging off an `itest-` sport. One new E2E journey (validation, edition and discipline selection, Trail Running metadata errors then success, edit round-trip, delete); `scripts/e2e-admin.ts` seeds a fixture edition and a trail discipline and cleans them up.
+
+**Final review.** Verified: all three actions call `denied()` first (covered by the authorization test); effective date/location inheritance (unit rules + integration); lock order edition → competition → location with the mutation check; metadata is only ever dropped by an explicit admin action (clearing a managed field, or `discardStoredMetadata` when changing discipline); soft delete keeps the row, slug and soft-deleted results. Approved correction applied: `distanceKm` is optional.
+
+**Limitations.** Edition, discipline and location pickers are native selects (editions and locations capped at 500). Only Trail Running has a metadata form; other disciplines save without details. Unchecked "Beginner friendly" means "not set". `aidStations` appears in the legacy TypeScript interface but not in the approved Zod schema, so it is not editable (it is preserved if present). No restore, bulk actions or audit trail. The edition of a competition cannot be changed.
+
+**Next.** Stage 11: seed and end-to-end happy path (the roadmap's "Seed & e2e happy path"), then the public read layer. Athlete/Result admin and provider/resource/media admin remain deferred.

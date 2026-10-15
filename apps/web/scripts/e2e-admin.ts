@@ -19,7 +19,7 @@ try {
   if (process.argv[2] === "create") {
     if (!password) throw new Error("E2E_ADMIN_PASSWORD is required.")
     await createUserWithPassword({ email, name: "E2E Admin", password, role: "admin" })
-    // Catalog fixtures the series form needs (no seed data exists in events_test).
+    // Catalog fixtures the series and competition forms need (no seed data exists in events_test).
     const sport = await db.sport.upsert({ where: { slug: `${PREFIX}sport` }, update: {}, create: { name: "E2E Sport", slug: `${PREFIX}sport` } })
     const discipline = await db.discipline.upsert({
       where: { slug: `${PREFIX}discipline` },
@@ -31,8 +31,14 @@ try {
       const organizer = await db.organizer.upsert({ where: { slug: `${PREFIX}org-${n.toLowerCase()}` }, update: {}, create: { name: `E2E Org ${n}`, slug: `${PREFIX}org-${n.toLowerCase()}` } })
       organizerIds[n] = organizer.id
     }
+    // Competition form fixtures: "trail-running" is the slug that selects the Trail Running metadata fields.
+    await db.discipline.upsert({
+      where: { slug: "trail-running" },
+      update: {},
+      create: { name: "E2E Trail Running", slug: "trail-running", sportId: sport.id },
+    })
     // Edition form fixtures: a series whose organizer template is Alpha (primary) + Beta (co-organizer), and a venue.
-    await db.eventSeries.upsert({
+    const templateSeries = await db.eventSeries.upsert({
       where: { slug: `${PREFIX}template-series` },
       update: {},
       create: {
@@ -42,19 +48,35 @@ try {
         organizers: { create: [{ organizerId: organizerIds.Alpha, role: "PRIMARY" }, { organizerId: organizerIds.Beta, role: "CO_ORGANIZER" }] },
       },
     })
-    await db.location.upsert({
+    const venue = await db.location.upsert({
       where: { slug: `${PREFIX}venue` },
       update: {},
       create: { country: "Venezuela", city: "E2E City", venueName: "E2E Venue", slug: `${PREFIX}venue` },
     })
+    // The edition the competition journey creates competitions under (2032-06-10 to 2032-06-12, at the venue).
+    await db.eventEdition.upsert({
+      where: { slug: `${PREFIX}fixture-edition` },
+      update: {},
+      create: {
+        eventSeriesId: templateSeries.id,
+        name: "E2E Fixture Edition",
+        slug: `${PREFIX}fixture-edition`,
+        year: 2032,
+        startsOn: new Date("2032-06-10T00:00:00.000Z"),
+        endsOn: new Date("2032-06-12T00:00:00.000Z"),
+        locationId: venue.id,
+      },
+    })
   } else if (process.argv[2] === "cleanup") {
     // Editions created through the UI are only soft-deleted there; remove them (and their assignments) here.
+    await db.competition.deleteMany({ where: { eventEdition: { slug: { startsWith: PREFIX } } } })
     await db.eventEditionOrganizer.deleteMany({ where: { eventEdition: { slug: { startsWith: PREFIX } } } })
     await db.eventEdition.deleteMany({ where: { slug: { startsWith: PREFIX } } })
     await db.eventSeriesOrganizer.deleteMany({ where: { eventSeries: { slug: { startsWith: PREFIX } } } })
     await db.eventSeries.deleteMany({ where: { slug: { startsWith: PREFIX }, editions: { none: {} } } })
     await db.organizer.deleteMany({ where: { slug: { startsWith: PREFIX }, seriesAssignments: { none: {} }, editionAssignments: { none: {} } } })
     await db.location.deleteMany({ where: { slug: { startsWith: PREFIX }, eventEditions: { none: {} }, competitions: { none: {} } } })
+    await db.discipline.deleteMany({ where: { slug: "trail-running", sport: { slug: `${PREFIX}sport` }, eventSeries: { none: {} }, competitions: { none: {} } } })
     await db.discipline.deleteMany({ where: { slug: `${PREFIX}discipline`, eventSeries: { none: {} } } })
     await db.sport.deleteMany({ where: { slug: `${PREFIX}sport`, disciplines: { none: {} } } })
     await db.user.deleteMany({ where: { email } }) // sessions and accounts cascade

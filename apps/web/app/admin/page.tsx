@@ -27,6 +27,11 @@ export default function AdminPage() {
             Event editions
           </Link>
         </li>
+        <li>
+          <Link href="/admin/competitions" className="underline underline-offset-4">
+            Competitions
+          </Link>
+        </li>
       </ul>
     </div>
   )

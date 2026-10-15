@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  deriveCompetitionSlug,
   resolveEffectiveSchedule,
   validateCompetitionSchedule,
   type CompetitionSchedule,
@@ -114,5 +115,25 @@ describe("validateCompetitionSchedule", () => {
       "startsOn:invalid_date",
       "startTime:invalid_time",
     ])
+  })
+})
+
+describe("deriveCompetitionSlug", () => {
+  it("derives a slug from the name alone", () => {
+    expect(deriveCompetitionSlug("Recreational 5K")).toBe("recreational-5k")
+  })
+
+  it("returns null when the name has no letters or digits", () => {
+    expect(deriveCompetitionSlug("***")).toBeNull()
+  })
+})
+
+describe("validateCompetitionSchedule: inherited end date", () => {
+  it("reports only the start date when an own start outside the edition makes the inherited end fall outside too", () => {
+    expect(codes(edition({ endsOn: "2030-05-12" }), comp({ startsOn: "2030-05-20" }))).toEqual(["startsOn:outside_edition"])
+  })
+
+  it("still reports an own end date outside the edition", () => {
+    expect(codes(edition({ endsOn: "2030-05-12" }), comp({ startsOn: "2030-05-12", endsOn: "2030-05-13" }))).toEqual(["endsOn:outside_edition"])
   })
 })

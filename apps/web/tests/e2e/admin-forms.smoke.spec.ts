@@ -12,7 +12,7 @@ const hydrated = (page: Page) => page.waitForLoadState("networkidle")
 const run = `itest-e2e-${Date.now()}`
 
 test("unauthenticated visitors are redirected to login", async ({ page }) => {
-  for (const path of ["/admin", "/admin/organizers", "/admin/locations/new", "/admin/event-series", "/admin/event-series/new", "/admin/event-editions", "/admin/event-editions/new"]) {
+  for (const path of ["/admin", "/admin/organizers", "/admin/locations/new", "/admin/event-series", "/admin/event-series/new", "/admin/event-editions", "/admin/event-editions/new", "/admin/competitions", "/admin/competitions/new"]) {
     await page.goto(path)
     await expect(page).toHaveURL(/\/login/)
   }
@@ -196,5 +196,93 @@ test("event edition: validation, inherited organizers, edit assignments, same-ye
     await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click()
     await expect(page.getByRole("status")).toHaveText("Edition deleted.")
   }
+})
+
+test("competition: validation, Trail Running metadata, edit, delete", async ({ page }) => {
+  const name = `${run} Trail 21K`
+  await page.goto("/admin/competitions/new")
+  await hydrated(page)
+  await page.getByRole("button", { name: "Create competition" }).click()
+  await expect(page.getByText("Select an edition.")).toBeVisible()
+  await expect(page.getByText("Select a discipline.")).toBeVisible()
+  await expect(page.getByText("Name is required.")).toBeVisible()
+
+  await page.getByLabel("Edition").selectOption({ label: "E2E Fixture Edition (2032)" })
+  await expect(page.getByText("Edition dates: 2032-06-10 → 2032-06-12")).toBeVisible()
+  await expect(page.getByText("Trail running details")).toBeHidden()
+  await page.getByLabel("Discipline").selectOption({ label: "E2E Sport · E2E Trail Running" })
+  await expect(page.getByText("Trail running details")).toBeVisible()
+  await page.getByRole("textbox", { name: "Name" }).fill(name)
+
+  // Invalid metadata and an own start date outside the edition are reported together.
+  await page.getByLabel("Distance (km)").fill("far")
+  await page.getByLabel("Start date").fill("2032-06-20")
+  await page.getByRole("button", { name: "Create competition" }).click()
+  await expect(page.getByText("Enter a number.")).toBeVisible()
+  await expect(page.getByText("The start date must fall within the edition dates.")).toBeVisible()
+
+  await page.getByLabel("Distance (km)").fill("21,5")
+  await page.getByLabel("Elevation gain (m)").fill("1200")
+  await page.getByLabel("Difficulty").selectOption({ label: "Advanced" })
+  await page.getByLabel("Terrain types").fill("mountain, rocky")
+  await page.getByLabel("Start date").fill("2032-06-11")
+  await page.getByRole("button", { name: "Create competition" }).click()
+  await expect(page.getByRole("status")).toHaveText("Competition created.")
+
+  await page.getByLabel("Search competitions").fill(run)
+  await page.getByRole("button", { name: "Search" }).click()
+  await page.waitForURL(/q=/)
+  await hydrated(page)
+  const row = page.getByRole("row", { name: new RegExp(name) })
+  await expect(row).toContainText("2032-06-11")
+  await expect(row).toContainText("E2E Venue, E2E City") // location inherited from the edition
+  await row.getByRole("link", { name: "Edit" }).click()
+  await page.waitForURL("**/edit")
+  await hydrated(page)
+
+  // Edit: metadata round-trips, the edition is fixed, an unrelated edit keeps the metadata.
+  await expect(page.getByLabel("Distance (km)")).toHaveValue("21.5")
+  await expect(page.getByLabel("Difficulty")).toHaveValue("advanced")
+  await expect(page.getByLabel("Edition")).toHaveCount(0)
+  await page.getByLabel("Description").fill("Edited")
+  await page.getByLabel("Participation").selectOption({ label: "Recreational" })
+  await page.getByRole("button", { name: "Save changes" }).click()
+  await expect(page.getByRole("status")).toHaveText("Competition updated.")
+
+  await page.getByLabel("Search competitions").fill(run)
+  await page.getByRole("button", { name: "Search" }).click()
+  await page.waitForURL(/q=/)
+  await hydrated(page)
+  await expect(page.getByRole("row", { name: new RegExp(name) })).toContainText("recreational")
+  await page.getByRole("row", { name: new RegExp(name) }).getByRole("link", { name: "Edit" }).click()
+  await page.waitForURL("**/edit")
+  await hydrated(page)
+  await expect(page.getByLabel("Distance (km)")).toHaveValue("21.5")
+  await page.getByRole("link", { name: "Cancel" }).click()
+
+  await page.getByLabel("Search competitions").fill(run)
+  await page.getByRole("button", { name: "Search" }).click()
+  await page.waitForURL(/q=/)
+  await hydrated(page)
+  await page.getByRole("button", { name: `Delete ${name}` }).click()
+  await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click()
+  await expect(page.getByRole("status")).toHaveText("Competition deleted.")
+
+  // The distance is optional: a trail competition can be created before the course is confirmed.
+  const unconfirmed = `${run} Trail TBD`
+  await page.goto("/admin/competitions/new")
+  await hydrated(page)
+  await page.getByLabel("Edition").selectOption({ label: "E2E Fixture Edition (2032)" })
+  await page.getByLabel("Discipline").selectOption({ label: "E2E Sport · E2E Trail Running" })
+  await page.getByRole("textbox", { name: "Name" }).fill(unconfirmed)
+  await page.getByRole("button", { name: "Create competition" }).click()
+  await expect(page.getByRole("status")).toHaveText("Competition created.")
+  await page.getByLabel("Search competitions").fill(run)
+  await page.getByRole("button", { name: "Search" }).click()
+  await page.waitForURL(/q=/)
+  await hydrated(page)
+  await page.getByRole("button", { name: `Delete ${unconfirmed}` }).click()
+  await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click()
+  await expect(page.getByRole("status")).toHaveText("Competition deleted.")
 })
 })

@@ -1,7 +1,7 @@
 # Event editions
 
 Admin CRUD for `EventEdition`: one occurrence of an `EventSeries` (e.g. "Maratón del Sol 2030, Primavera").
-Routes: `/admin/event-editions`, `/new`, `/[id]/edit`. Competitions are a separate, later feature.
+Routes: `/admin/event-editions`, `/new`, `/[id]/edit`. Competitions are a separate feature (`features/competitions`).
 
 ## Responsibilities
 
@@ -63,8 +63,8 @@ assignment changes as well. Lock order, always:
 4. organizer rows `FOR SHARE`, `ORDER BY id` (paired with `deleteOrganizer`).
 
 Deleting a location or organizer takes only its own row, so no cycle is possible. Delete locks only the edition row.
-**Future code that adds children to an edition (competitions, providers, resources, media) must take the edition row
-`FOR SHARE` and re-check `deletedAt` in its transaction**, otherwise it can race with `deleteEventEdition`.
+**Code that adds children to an edition (competitions do; providers, resources and media must) takes the edition row
+`FOR SHARE` and re-checks `deletedAt` in its transaction**, otherwise it can race with `deleteEventEdition`.
 
 ## Deletion
 
