@@ -219,3 +219,21 @@ Conventions live in `AGENTS.md` (`CLAUDE.md` imports it). Deviations from the or
 **Requirements for future features.** Call `requireAdmin()` first in every Server Action/Route Handler; keep `/api/auth` as the only auth surface; test unauthenticated and non-admin denial for each new mutation.
 
 **Verification.** Prisma validate, typecheck, lint and `next build` pass; 51 unit and 29 integration tests (unauthenticated/non-admin/admin/banned access, invalid credentials, sign-up disabled, hashed password, session validation, forged token, expiry, revocation, sign-out). A manual smoke test against a production build on `events_test` confirmed: `/admin` → 307 `/login`, bad login 401, sign-up rejected, login 200, `/admin` 200, `/login` → `/admin`; the smoke user was then removed.
+
+## Stage 6 — Locations admin CRUD (complete)
+
+First admin module; the pattern for the next ones. Files: `src/features/locations/{schemas,rules,queries,actions}.ts`, `components/{location-form,locations-table,delete-location-button}.tsx`, routes `app/admin/locations/{page,loading,new,[id]/edit}`. No schema/migration/auth changes; `metadata`, which has no UI, is never read or written by the form.
+
+**Pattern (reuse for other modules)**
+- Every action: `requireAdmin()` first (`denied()` helper maps `AuthorizationError` to `fail(code)`), then Zod parse, then business checks, then write. Actions accept `unknown` and validate on the server. Success is `ok({ id })`; clients navigate to the list with `?notice=created|updated|deleted` (shown as a status banner).
+- Lists are server-rendered from URL `q`/`page` (plain GET search form, link-based pagination, 20/page, page clamped to the last page, stable ordering with `id` tiebreaker). Decimal columns are converted to numbers in queries.
+
+**Decisions**
+- *Slugs:* normalized with `generateSlug`; empty slug is derived from venue, city, state, country (`rules.ts`). Collisions are never auto-suffixed: the admin gets a `conflict` with a `slug` field error. Slugs of soft-deleted rows stay reserved (message says so); there is no restore UI yet.
+- *Duplicates:* same country/state/city/venue/address (case-insensitive, null-aware, non-deleted) is rejected with a `conflict`, independent of slug. Pre-checks plus `P2002` handling cover races.
+- *Delete:* soft delete only; blocked with `conflict` while active (non-deleted) editions or competitions use the location, so relations are never nulled or orphaned. Soft-deleted editions keep their `locationId`.
+- *Update:* slug is editable and a changed slug is an explicit admin action; invalid ids and deleted rows return `not_found`.
+
+**Tests.** 10 unit (schemas, slug rules, list params) and 18 integration (`events_test`, `itest-` fixtures; the harness mocks only the request-header source and `revalidatePath`): unauthenticated/non-admin denial for all three actions with no data change, create/derived slug/validation, slug and place duplicates (incl. soft-deleted reservation), update without self-conflict and with metadata preserved, soft delete, usage block, filtering, pagination, usage counts. `cleanupFixtures` now also removes `itest-` locations.
+
+**Verification.** Prisma validate, typecheck, lint, `next build` pass; 61 unit and 47 integration tests pass. Not done: browser/E2E check of the forms and delete dialog.
