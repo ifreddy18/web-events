@@ -7,6 +7,8 @@
 - **Stage 3 done:** Vitest + Playwright foundation, test-DB safety guard, integration tests, pnpm pinned (see "Stage 3" at the end). `prisma.tsx` renamed to `prisma.ts`; guard and composite-FK test resolved.
 - **Stage 4 done:** AGENTS.md guidelines, shared date/action-result helpers, competition schedule rules, metadata validation example (see "Stage 4" at the end).
 - **Stage 5 done:** Better Auth admin authentication (see "Stage 5" at the end).
+- **Stages 6–8.5 done:** Locations, Organizers, EventSeries admin CRUD and the catalog seed (see the sections at the end).
+- **Stage 9 done:** EventEdition admin CRUD (see "Stage 9" at the end).
 
 **Status:** Proposal, nothing applied. Baseline: `main` @ `c4d8605` (Prisma v2.2 docs approved); v1 preserved on `main_v1`.
 **Inputs inspected:** `apps/web` tree, `package.json`, configs (`prisma.config.ts`, `tsconfig.json`, `components.json`, `next.config.ts`), `src/server/db/prisma.tsx`, v2.2 proposal files (`schema_v2_2.prisma`, `_decisions.md`, `_constraints.sql`).
@@ -304,3 +306,24 @@ Distances (5K, 10K, 21K, 42K) are not disciplines; they belong on Competition. L
 **Verification.** Seed run twice on `events_dev`: first 6/13 created, second 0/0 created; `listDisciplineOptions` query returns all 13 `Sport · Discipline` options.
 
 **Follow-up.** Aquathlon slug standardized to `aquathlon` (the `events_dev` row was renamed after confirming no EventSeries, Competition or provider referenced it). Readability conventions were added to `AGENTS.md`; the seed code got clearer names and transaction/`skipDuplicates` comments. Ultra Running is unchanged for now.
+
+
+## Stage 9 — EventEdition admin CRUD (complete)
+
+Fourth admin module. Files: `src/features/event-editions/{schemas,rules,queries,actions}.ts`, `components/{event-edition-form,event-editions-table,delete-event-edition-button}.tsx`, `README.md` (business rules, locking, testing notes), routes `app/admin/event-editions/{page,loading,new,[id]/edit}`, dashboard link. Shared: `src/shared/organizer-assignments.ts` (assignment diff, moved out of event-series; `event-series/rules.ts` re-exports it) and zoned wall-clock helpers in `src/shared/local-date.ts`. No schema, migration or auth changes. Small edits elsewhere: `deleteLocation` now takes `FOR UPDATE` on the location (pairs with the `FOR SHARE` edition writes take), and two E2E fixtures/waits (below).
+
+**Decisions**
+- *Identity:* several editions per series and year are allowed but must differ by `label` (case-insensitive, "no label" is a value); checked in the transaction under the series lock because the DB has no constraint. Slugs are derived from name + label + year, reserved by soft-deleted rows, never auto-suffixed; `P2002` → `conflict`. The series is fixed after creation.
+- *Organizers:* the form pre-fills the series template; a caller omitting `primaryOrganizerId` gets the template copied server-side. After creation the edition's rows are the source of truth in both directions. Same remove → demote → promote → add diff as series, one PRIMARY, no duplicates, active organizers only.
+- *Dates:* date-only and time-only strings via shared helpers; rules mirror the SQL CHECKs; TBA, multi-day, overnight (needs later `endsOn`) and postponed (`rescheduledFromOn`) supported. `year` is the edition's identity and is never compared with `startsOn` (approved rule): a 2026 edition postponed to 2027 keeps year 2026, and date changes never alter `year` or `slug`. Registration open/close are wall-clock in the edition's `timeZone` converted with Intl. Changing dates re-validates active competitions through `competitions/rules.ts`.
+- *Statuses:* publication, lifecycle and registration stay independent and any combination is valid (approved rule): a published edition with registration OPEN does not need `registrationUrl`, because registration can happen via WhatsApp, Instagram, phone or in person. There are no publish gates; COMPLETED only needs a start date.
+- *Delete:* soft, blocked by active competitions, providers, resources or media; assignments and slug kept; no restore.
+- *Not in the form:* `metadata` (preserved), child relations.
+
+**Lock order (reviewed).** series `FOR UPDATE` → edition `FOR UPDATE` → location `FOR SHARE` → organizers `FOR SHARE ORDER BY id`. Organizer/location deletes lock only their own row; edition delete only the edition row. Future edition children must take the edition row `FOR SHARE` and re-check `deletedAt`.
+
+**Tests.** 29 new unit (rules, schemas, slug derivation, list params, zoned conversion) and 54 integration (`events_test`): authorization, create/TBA/multi-day/postponed, validation, same-year editions, slug conflicts incl. two simulated lost races with rollback, organizer inheritance and independence, PRIMARY swap/replace/demote, deleted refs, competition window check, soft delete and blockers, search/filters/ordering/pagination. One new E2E journey (validation, template pre-fill, edited assignments, edit round-trip, template untouched, same-year label conflict, delete). The existing series E2E test had an intermittent race (clicking Delete on a page not yet filtered/hydrated after a GET search); it now waits for the filtered URL and hydration.
+
+**Limitations.** Series/location/organizer pickers are native selects capped at 500 rows. No restore, no bulk actions, no per-field audit. `COMPLETED` is not checked against today's date. Providers, resources and media have no admin UI yet; their delete blockers are exercised in integration tests with directly created rows.
+
+**Next.** Stage 10: Competition admin (dates/location inherited through `competitions/rules.ts`; must take the edition row `FOR SHARE`).

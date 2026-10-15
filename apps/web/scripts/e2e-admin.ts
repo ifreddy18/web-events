@@ -21,15 +21,36 @@ try {
     await createUserWithPassword({ email, name: "E2E Admin", password, role: "admin" })
     // Catalog fixtures the series form needs (no seed data exists in events_test).
     const sport = await db.sport.upsert({ where: { slug: `${PREFIX}sport` }, update: {}, create: { name: "E2E Sport", slug: `${PREFIX}sport` } })
-    await db.discipline.upsert({
+    const discipline = await db.discipline.upsert({
       where: { slug: `${PREFIX}discipline` },
       update: {},
       create: { name: "E2E Discipline", slug: `${PREFIX}discipline`, sportId: sport.id },
     })
+    const organizerIds: Record<string, string> = {}
     for (const n of ["Alpha", "Beta", "Gamma"]) {
-      await db.organizer.upsert({ where: { slug: `${PREFIX}org-${n.toLowerCase()}` }, update: {}, create: { name: `E2E Org ${n}`, slug: `${PREFIX}org-${n.toLowerCase()}` } })
+      const organizer = await db.organizer.upsert({ where: { slug: `${PREFIX}org-${n.toLowerCase()}` }, update: {}, create: { name: `E2E Org ${n}`, slug: `${PREFIX}org-${n.toLowerCase()}` } })
+      organizerIds[n] = organizer.id
     }
+    // Edition form fixtures: a series whose organizer template is Alpha (primary) + Beta (co-organizer), and a venue.
+    await db.eventSeries.upsert({
+      where: { slug: `${PREFIX}template-series` },
+      update: {},
+      create: {
+        name: "E2E Template Series",
+        slug: `${PREFIX}template-series`,
+        disciplineId: discipline.id,
+        organizers: { create: [{ organizerId: organizerIds.Alpha, role: "PRIMARY" }, { organizerId: organizerIds.Beta, role: "CO_ORGANIZER" }] },
+      },
+    })
+    await db.location.upsert({
+      where: { slug: `${PREFIX}venue` },
+      update: {},
+      create: { country: "Venezuela", city: "E2E City", venueName: "E2E Venue", slug: `${PREFIX}venue` },
+    })
   } else if (process.argv[2] === "cleanup") {
+    // Editions created through the UI are only soft-deleted there; remove them (and their assignments) here.
+    await db.eventEditionOrganizer.deleteMany({ where: { eventEdition: { slug: { startsWith: PREFIX } } } })
+    await db.eventEdition.deleteMany({ where: { slug: { startsWith: PREFIX } } })
     await db.eventSeriesOrganizer.deleteMany({ where: { eventSeries: { slug: { startsWith: PREFIX } } } })
     await db.eventSeries.deleteMany({ where: { slug: { startsWith: PREFIX }, editions: { none: {} } } })
     await db.organizer.deleteMany({ where: { slug: { startsWith: PREFIX }, seriesAssignments: { none: {} }, editionAssignments: { none: {} } } })

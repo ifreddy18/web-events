@@ -12,7 +12,7 @@ const hydrated = (page: Page) => page.waitForLoadState("networkidle")
 const run = `itest-e2e-${Date.now()}`
 
 test("unauthenticated visitors are redirected to login", async ({ page }) => {
-  for (const path of ["/admin", "/admin/organizers", "/admin/locations/new", "/admin/event-series", "/admin/event-series/new"]) {
+  for (const path of ["/admin", "/admin/organizers", "/admin/locations/new", "/admin/event-series", "/admin/event-series/new", "/admin/event-editions", "/admin/event-editions/new"]) {
     await page.goto(path)
     await expect(page).toHaveURL(/\/login/)
   }
@@ -111,10 +111,90 @@ test("event series: validation, primary + co-organizers, edit assignments", asyn
 
   await page.getByLabel("Search series").fill(run)
   await page.getByRole("button", { name: "Search" }).click()
+  // The unfiltered list already shows the row, so wait for the filtered page and its hydration
+  // before using the delete dialog; otherwise the click can land on a page that is being replaced.
+  await page.waitForURL(/q=/)
+  await hydrated(page)
   await expect(page.getByRole("row", { name: new RegExp(name) })).toContainText("E2E Org Beta +1")
 
   await page.getByRole("button", { name: `Delete ${name}` }).click()
   await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click()
   await expect(page.getByRole("status")).toHaveText("Series deleted.")
+})
+
+test("event edition: validation, inherited organizers, edit assignments, same-year editions", async ({ page }) => {
+  const name = `${run} Edition`
+  const secondName = `${run} Second`
+  const selectedOption = (id: string) => page.locator(`#${id} option:checked`)
+
+  await page.goto("/admin/event-editions/new")
+  await hydrated(page)
+  await page.getByRole("button", { name: "Create edition" }).click()
+  await expect(page.getByText("Select a series.")).toBeVisible()
+  await expect(page.getByText("Name is required.")).toBeVisible()
+  await expect(page.getByText("Select a primary organizer.")).toBeVisible()
+
+  // Selecting a series pre-fills its organizer template (Alpha primary, Beta co-organizer).
+  await page.getByLabel("Series").selectOption({ label: "E2E Template Series" })
+  await expect(selectedOption("primaryOrganizerId")).toHaveText("E2E Org Alpha")
+  await expect(page.getByLabel("E2E Org Beta")).toBeChecked()
+  await expect(page.getByLabel("E2E Org Gamma")).not.toBeChecked()
+
+  await page.getByLabel("Edition name").fill(name)
+  await page.getByLabel("Year").fill("2031")
+  await page.getByLabel("Start date").fill("2031-05-10")
+  await page.getByLabel("End date").fill("2031-05-09")
+  await page.getByRole("button", { name: "Create edition" }).click()
+  await expect(page.getByText("The end date cannot be before the start date.")).toBeVisible()
+
+  // Adjust the copied assignments (add Gamma) and fix the dates.
+  await page.getByLabel("End date").fill("2031-05-11")
+  await page.getByLabel("Location").selectOption({ label: "E2E Venue, E2E City, Venezuela" })
+  await page.getByLabel("E2E Org Gamma").check()
+  await page.getByRole("button", { name: "Create edition" }).click()
+  await expect(page.getByRole("status")).toHaveText("Edition created.")
+
+  await page.getByLabel("Search editions").fill(run)
+  await page.getByRole("button", { name: "Search" }).click()
+  const row = page.getByRole("row", { name: new RegExp(name) })
+  await expect(row).toContainText("E2E Org Alpha +2")
+  await expect(row).toContainText("2031-05-10 → 2031-05-11")
+
+  // Edit: dates round-trip unchanged, then make Gamma the primary and drop Alpha.
+  await row.getByRole("link", { name: "Edit" }).click()
+  await expect(selectedOption("primaryOrganizerId")).toHaveText("E2E Org Alpha")
+  await hydrated(page)
+  await expect(page.getByLabel("Start date")).toHaveValue("2031-05-10")
+  await page.getByLabel("Primary organizer").selectOption({ label: "E2E Org Gamma" })
+  await page.getByRole("button", { name: "Save changes" }).click()
+  await expect(page.getByRole("status")).toHaveText("Edition updated.")
+  await page.getByLabel("Search editions").fill(run)
+  await page.getByRole("button", { name: "Search" }).click()
+  await expect(page.getByRole("row", { name: new RegExp(name) })).toContainText("E2E Org Gamma +1")
+
+  // The series template is untouched by edition edits.
+  await page.goto("/admin/event-editions/new")
+  await hydrated(page)
+  await page.getByLabel("Series").selectOption({ label: "E2E Template Series" })
+  await expect(selectedOption("primaryOrganizerId")).toHaveText("E2E Org Alpha")
+
+  // A second edition in the same year must be distinguishable by label.
+  await page.getByLabel("Edition name").fill(secondName)
+  await page.getByLabel("Year").fill("2031")
+  await page.getByRole("button", { name: "Create edition" }).click()
+  await expect(page.getByRole("alert").filter({ hasText: "Add a label" })).toBeVisible()
+  await page.getByLabel("Label").fill("II")
+  await page.getByRole("button", { name: "Create edition" }).click()
+  await expect(page.getByRole("status")).toHaveText("Edition created.")
+
+  for (const editionName of [name, secondName]) {
+    await page.getByLabel("Search editions").fill(run)
+    await page.getByRole("button", { name: "Search" }).click()
+    await page.waitForURL(/q=/)
+    await hydrated(page)
+    await page.getByRole("button", { name: `Delete ${editionName}` }).click()
+    await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click()
+    await expect(page.getByRole("status")).toHaveText("Edition deleted.")
+  }
 })
 })

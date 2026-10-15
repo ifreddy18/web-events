@@ -73,6 +73,9 @@ export async function deleteLocation(id: unknown): Promise<ActionResult> {
   if (!parsedId.success) return fail("not_found", "Location not found.")
 
   return prisma.$transaction(async (tx) => {
+    // Row lock pairs with the share lock edition create/update takes on the location, so an
+    // assignment and this delete cannot both succeed against a stale usage count.
+    await tx.$queryRaw`SELECT id FROM locations WHERE id = ${parsedId.data}::uuid FOR UPDATE`
     const l = await tx.location.findFirst({
       where: { id: parsedId.data, deletedAt: null },
       select: {

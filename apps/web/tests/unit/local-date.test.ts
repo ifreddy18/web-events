@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest"
-import { isLocalDate, isLocalTime, localDateFromDb, localDateToDb } from "@/shared/local-date"
+import {
+  instantToZonedDateTime,
+  isLocalDate,
+  isLocalDateTime,
+  isLocalTime,
+  isValidTimeZone,
+  localDateFromDb,
+  localDateToDb,
+  zonedDateTimeToInstant,
+} from "@/shared/local-date"
 
 describe("local dates", () => {
   it("validates real calendar dates", () => {
@@ -29,5 +38,37 @@ describe("local dates", () => {
 
   it("rejects invalid dates on write", () => {
     expect(() => localDateToDb("2030-13-01")).toThrow(RangeError)
+  })
+})
+
+describe("wall-clock instants in a named time zone", () => {
+  it("converts Caracas wall-clock time (UTC-4, no DST) to the matching instant and back", () => {
+    const instant = zonedDateTimeToInstant("2030-06-15T08:30", "America/Caracas")
+    expect(instant.toISOString()).toBe("2030-06-15T12:30:00.000Z")
+    expect(instantToZonedDateTime(instant, "America/Caracas")).toBe("2030-06-15T08:30")
+  })
+
+  it("does not depend on the process time zone", () => {
+    const original = process.env.TZ
+    for (const tz of ["Pacific/Auckland", "UTC", "America/Los_Angeles"]) {
+      process.env.TZ = tz
+      expect(zonedDateTimeToInstant("2030-01-01T00:00", "America/Caracas").toISOString()).toBe("2030-01-01T04:00:00.000Z")
+    }
+    process.env.TZ = original
+  })
+
+  it("applies daylight saving offsets of the target zone", () => {
+    expect(zonedDateTimeToInstant("2030-01-15T12:00", "America/New_York").toISOString()).toBe("2030-01-15T17:00:00.000Z")
+    expect(zonedDateTimeToInstant("2030-07-15T12:00", "America/New_York").toISOString()).toBe("2030-07-15T16:00:00.000Z")
+  })
+
+  it("validates date-times and time zone names", () => {
+    expect(isLocalDateTime("2030-06-15T08:30")).toBe(true)
+    expect(isLocalDateTime("2030-06-15 08:30")).toBe(false)
+    expect(isLocalDateTime("2030-06-15T24:00")).toBe(false)
+    expect(isValidTimeZone("America/Caracas")).toBe(true)
+    expect(isValidTimeZone("Mars/Olympus")).toBe(false)
+    expect(() => zonedDateTimeToInstant("nope", "UTC")).toThrow(RangeError)
+    expect(instantToZonedDateTime(null, "UTC")).toBeNull()
   })
 })
