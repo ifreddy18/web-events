@@ -5,6 +5,7 @@
 - **Stage 1 done:** local PostgreSQL 17 (Homebrew), databases `events_dev` / `events_test`, `.env` / `.env.test` (ignored) + `.env.example`, v1 admin/features code removed (v1 preserved in `main_v1`).
 - **Stage 2 done:** `prisma/schema.prisma` = approved v2.2; v1 migrations, seeds and fixtures removed (recover via `git show main_v1:<path>`); single initial migration `prisma/migrations/20261014000000_init` = `prisma migrate diff` output + appended `schema_v2_2_constraints.sql` (30 tables, 36 FKs, 9 CHECKs, 2 partial unique indexes). Applied with `migrate deploy` to both DBs; schemas identical; Prisma Client 6.19.3 generated. `dotenv` added as a direct dependency; `package.json#prisma` seed config removed. Still open: composite-FK write test on `EventResource`, test-DB guard, Vitest/Playwright, `src/types/metadata` (v1 reference) and `src/server/db/prisma.tsx` rename.
 - **Stage 3 done:** Vitest + Playwright foundation, test-DB safety guard, integration tests, pnpm pinned (see "Stage 3" at the end). `prisma.tsx` renamed to `prisma.ts`; guard and composite-FK test resolved.
+- **Stage 4 done:** AGENTS.md guidelines, shared date/action-result helpers, competition schedule rules, metadata validation example (see "Stage 4" at the end).
 
 **Status:** Proposal, nothing applied. Baseline: `main` @ `c4d8605` (Prisma v2.2 docs approved); v1 preserved on `main_v1`.
 **Inputs inspected:** `apps/web` tree, `package.json`, configs (`prisma.config.ts`, `tsconfig.json`, `components.json`, `next.config.ts`), `src/server/db/prisma.tsx`, v2.2 proposal files (`schema_v2_2.prisma`, `_decisions.md`, `_constraints.sql`).
@@ -181,3 +182,22 @@ Each stage ends green (`pnpm ci`) and in one reviewable commit/PR.
 **Layout.** `src/server/db/prisma.ts` (singleton, `server-only`; stubbed in Vitest via alias), `vitest.config.mts` (unit), `vitest.integration.config.mts` (serial, `.env.test`), `tests/{unit,integration,e2e,support}`.
 
 **Results.** Prisma validate OK; typecheck, lint clean; 15 unit tests (guard) and 16 integration tests pass (connection, same-year editions, one PRIMARY organizer, edition date/time CHECKs, composite-FK rejection, multiple galleries per photographer, duplicate URL per edition rejected, same URL across editions allowed). `events_dev` and `events_test` both accessible with the init migration applied, and `events_test` left empty after runs.
+
+## Stage 4 — Shared architecture and guidelines (complete)
+
+Conventions live in `AGENTS.md` (`CLAUDE.md` imports it). Deviations from the original structure sketch above: no `service` layer and no `shared/metadata` registry; features use flat `schemas.ts / queries.ts / actions.ts / rules.ts` files created on demand; unit tests live in `tests/unit` (not colocated).
+
+**Implemented (no schema, migration or CRUD changes)**
+- `src/shared/local-date.ts`: `LocalDate`/`LocalTime` string types, validation, `localDateFromDb`/`localDateToDb` (UTC getters, so no timezone shift).
+- `src/shared/action-result.ts`: `ActionResult<T>` (`ok` | `{code, message, fieldErrors}`), `ok`, `fail`, `fromZodError`, `hasPrismaCode` (structural, for `P2002`/`P2003`).
+- `src/features/competitions/rules.ts`: `resolveEffectiveSchedule` and `validateCompetitionSchedule` per decision #4. Returns all issues (`invalid_date`, `invalid_time`, `missing_start_date`, `end_before_start`, `outside_edition`, `time_order`) with the offending field.
+- `src/features/competitions/metadata.ts`: `parseCompetitionMetadata(disciplineSlug, raw)` with one strict Zod schema (`trail-running`: `distanceKm` required, optional elevation/terrain/cutoff/tags/difficulty/beginnerFriendly).
+
+**Decisions not covered elsewhere**
+- Competition times are overrides only; they are not inherited from the edition.
+- An edition with no `startsOn` (TBA) imposes no window; competition dates are then accepted, but times and `endsOn` still need a resolvable start date.
+- Overnight times (end before start) are valid only when the effective end date is after the start date.
+- Non-empty metadata for a discipline with no schema is rejected; empty metadata is always valid. Schemas are added per discipline when a feature needs it. The `trail-running` slug must match the seeded discipline slug.
+- Existing `src/types/metadata/*` (v1 interfaces) are untouched reference material, not used yet.
+
+**Results.** typecheck and lint clean; 45 unit tests (guard, dates, action results, schedule rules, metadata) and 16 integration tests pass.
