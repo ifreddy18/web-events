@@ -40,7 +40,8 @@ tests/{unit,integration,e2e,support}
 - **Never** run `prisma migrate reset`, truncate tables, or run tests against `events_dev`, Supabase, or `accounting_system_*`. Use the pnpm scripts (`db:migrate` = dev DB, `db:migrate:test` = test DB); they go through `scripts/with-db-env.ts` and the guard in `tests/support/db-safety.ts`.
 
 ## Authorization, validation, errors
-- Every Server Action and mutating route re-checks authorization itself (`requireAdmin()` once auth exists); layouts/middleware are not enough. Actions are public endpoints.
+- Every Server Action and mutating route re-checks authorization itself by calling `requireAdmin()` (`src/server/auth/session.ts`) FIRST; layouts/redirects are navigation only, not the boundary. Actions are public endpoints. `requireAdmin()` throws `AuthorizationError` (`code`: `unauthorized` | `forbidden`): in actions catch it and return `fail(e.code, e.message)`; in Route Handlers map to 401/403.
+- Auth is Better Auth (email + password, admin plugin, `role: "admin"`), no public sign-up, no OAuth. Never write custom session/password code, never enable sign-up; create admins only with `pnpm auth:create-admin`. Deactivate admins with the admin plugin `banned` flag.
 - Validate all external input with Zod on the server, then apply business rules, then write (in a transaction when several rows change).
 - Expected failures (validation, unauthorized, not found, conflict) return `ActionResult` from `src/shared/action-result.ts`; unexpected errors are thrown, not swallowed. Never leak raw DB errors to the client.
 

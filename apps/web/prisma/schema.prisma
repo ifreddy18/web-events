@@ -679,16 +679,76 @@ model ServiceProviderTag {
   @@map("service_provider_tags")
 }
 
+// Better Auth core models (User, Session, Account, Verification) + admin plugin fields.
+// Field names are fixed by Better Auth; columns are mapped to snake_case.
 model User {
-  id        String     @id @default(uuid()) @db.Uuid
-  email     String?    @unique
-  name      String?
-  favorites Favorite[]
-  createdAt DateTime   @default(now()) @map("created_at")
-  updatedAt DateTime   @updatedAt @map("updated_at")
-  deletedAt DateTime?  @map("deleted_at")
+  id            String     @id @default(uuid()) @db.Uuid
+  email         String     @unique
+  name          String
+  emailVerified Boolean    @default(false) @map("email_verified")
+  image         String?
+  // Admin plugin: "admin" can access the admin panel; "user" cannot. No public sign-up.
+  role          String     @default("user")
+  banned        Boolean    @default(false)
+  banReason     String?    @map("ban_reason")
+  banExpires    DateTime?  @map("ban_expires")
+  sessions      Session[]
+  accounts      Account[]
+  favorites     Favorite[]
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+  deletedAt     DateTime?  @map("deleted_at")
 
   @@map("users")
+}
+
+model Session {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  token          String   @unique
+  expiresAt      DateTime @map("expires_at")
+  ipAddress      String?  @map("ip_address")
+  userAgent      String?  @map("user_agent")
+  impersonatedBy String?  @map("impersonated_by")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(uuid()) @db.Uuid
+  userId                String    @map("user_id") @db.Uuid
+  accountId             String    @map("account_id")
+  providerId            String    @map("provider_id")
+  password              String?
+  accessToken           String?   @map("access_token")
+  refreshToken          String?   @map("refresh_token")
+  idToken               String?   @map("id_token")
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at")
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
+  scope                 String?
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(uuid()) @db.Uuid
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([identifier])
+  @@map("verifications")
 }
 
 model Favorite {

@@ -32,6 +32,8 @@ export async function cleanupFixtures(db: PrismaClient) {
   await db.organizer.deleteMany({ where: { slug: like } })
   await db.discipline.deleteMany({ where: { slug: like } })
   await db.sport.deleteMany({ where: { slug: like } })
+  // Sessions and accounts cascade from the user.
+  await db.user.deleteMany({ where: { email: like } })
 }
 
 /** Minimal fixtures: one sport/discipline/series. */

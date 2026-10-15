@@ -16,12 +16,14 @@
 		"db:migrate": "node scripts/with-db-env.ts dev prisma migrate dev",
 		"db:migrate:test": "node scripts/with-db-env.ts test prisma migrate deploy",
 		"db:studio": "node scripts/with-db-env.ts dev prisma studio",
+		"auth:create-admin": "node scripts/with-db-env.ts dev node --conditions=react-server scripts/create-admin.ts",
 		"db:seed": "echo 'db:seed is a placeholder: no seed implemented yet' && exit 1"
 	},
 	"dependencies": {
 		"@hookform/resolvers": "^5.4.0",
 		"@prisma/client": "6",
 		"@tanstack/react-table": "^8.21.3",
+		"better-auth": "^1.7.8",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",
 		"cmdk": "^1.1.1",

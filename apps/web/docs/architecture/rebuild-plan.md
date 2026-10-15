@@ -6,6 +6,7 @@
 - **Stage 2 done:** `prisma/schema.prisma` = approved v2.2; v1 migrations, seeds and fixtures removed (recover via `git show main_v1:<path>`); single initial migration `prisma/migrations/20261014000000_init` = `prisma migrate diff` output + appended `schema_v2_2_constraints.sql` (30 tables, 36 FKs, 9 CHECKs, 2 partial unique indexes). Applied with `migrate deploy` to both DBs; schemas identical; Prisma Client 6.19.3 generated. `dotenv` added as a direct dependency; `package.json#prisma` seed config removed. Still open: composite-FK write test on `EventResource`, test-DB guard, Vitest/Playwright, `src/types/metadata` (v1 reference) and `src/server/db/prisma.tsx` rename.
 - **Stage 3 done:** Vitest + Playwright foundation, test-DB safety guard, integration tests, pnpm pinned (see "Stage 3" at the end). `prisma.tsx` renamed to `prisma.ts`; guard and composite-FK test resolved.
 - **Stage 4 done:** AGENTS.md guidelines, shared date/action-result helpers, competition schedule rules, metadata validation example (see "Stage 4" at the end).
+- **Stage 5 done:** Better Auth admin authentication (see "Stage 5" at the end).
 
 **Status:** Proposal, nothing applied. Baseline: `main` @ `c4d8605` (Prisma v2.2 docs approved); v1 preserved on `main_v1`.
 **Inputs inspected:** `apps/web` tree, `package.json`, configs (`prisma.config.ts`, `tsconfig.json`, `components.json`, `next.config.ts`), `src/server/db/prisma.tsx`, v2.2 proposal files (`schema_v2_2.prisma`, `_decisions.md`, `_constraints.sql`).
@@ -201,3 +202,20 @@ Conventions live in `AGENTS.md` (`CLAUDE.md` imports it). Deviations from the or
 - Existing `src/types/metadata/*` (v1 interfaces) are untouched reference material, not used yet.
 
 **Results.** typecheck and lint clean; 45 unit tests (guard, dates, action results, schedule rules, metadata) and 16 integration tests pass.
+
+## Stage 5 — Admin authentication (complete)
+
+**Architecture.** Better Auth 1.7 with the Prisma adapter, email + password only, `disableSignUp: true`, no OAuth, no password recovery. Role management uses the Better Auth `admin` plugin (`role` = `admin` | `user`, `banned`). `nextCookies()` is enabled. Sessions are database-backed (7 days, refreshed daily) with no cookie cache, so deleting/revoking a session or banning a user takes effect on the next request. Sign-in is rate limited by Better Auth (5/min on `/sign-in/email`) because it goes through `/api/auth/[...all]`. Password hashing is Better Auth's default (scrypt); minimum length 12.
+
+- `src/server/auth/auth.ts`: the single `auth` instance. `session.ts`: `getSession()`, `hasAdminRole()`, `requireAdmin()` + `AuthorizationError`. `provision.ts`: `createUserWithPassword()` (script/tests only).
+- UI: `/login` (client form, Zod `loginSchema`, generic "Invalid email or password." message) and `/admin` (layout redirects unauthenticated/non-admin/banned users to `/login`; signed-in non-admins see a "no administrator access" message and a sign-out button). Authenticated admins hitting `/login` go to `/admin`. The layout is navigation only; authorization lives in `requireAdmin()`.
+- Existing `User` model was reused (no second user entity): `email`/`name` now required; added `emailVerified`, `image`, `role`, `banned`, `banReason`, `banExpires`; new `Session`, `Account`, `Verification`. UUID ids via `advanced.database.generateId: "uuid"`. Migration `20261015002950_better_auth` (tables were empty), applied to `events_dev` and `events_test` only. Soft delete (`deletedAt`) is not seen by Better Auth: deactivate admins with `banned`.
+
+**Environment variables** (`.env`, `.env.test`; see `.env.example`): `DATABASE_URL`, `BETTER_AUTH_SECRET` (≥ 32 chars, distinct per environment; the app refuses to start without it), `BETTER_AUTH_URL` (dev `http://localhost:3000`, test/Playwright `http://localhost:3100`). Production needs its own values and HTTPS.
+
+**Provisioning administrators.** The only way to create accounts is the local script, which targets `events_dev` only (guarded):
+`pnpm auth:create-admin --email <email> --name "<name>"`: it prompts for the password (hidden; `ADMIN_PASSWORD` env for non-interactive use; never put it in a committed file). It fails if the email exists or the password is shorter than 12 characters. Use the same command to add a second administrator later. A future in-app "invite admin" screen would use the admin plugin `createUser` API behind `requireAdmin()`; do not enable sign-up for this.
+
+**Requirements for future features.** Call `requireAdmin()` first in every Server Action/Route Handler; keep `/api/auth` as the only auth surface; test unauthenticated and non-admin denial for each new mutation.
+
+**Verification.** Prisma validate, typecheck, lint and `next build` pass; 51 unit and 29 integration tests (unauthenticated/non-admin/admin/banned access, invalid credentials, sign-up disabled, hashed password, session validation, forged token, expiry, revocation, sign-out). A manual smoke test against a production build on `events_test` confirmed: `/admin` → 307 `/login`, bad login 401, sign-up rejected, login 200, `/admin` 200, `/login` → `/admin`; the smoke user was then removed.
