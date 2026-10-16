@@ -12,6 +12,13 @@ const hydrated = (page: Page) => page.waitForLoadState("networkidle")
 
 const run = `itest-e2e-${Date.now()}`
 
+/** Opens a searchable selector (role=combobox), types a search and picks the matching option. */
+async function pickSearchable(page: Page, label: string, search: string, option: string | RegExp) {
+  await page.getByRole("combobox", { name: label, exact: true }).click()
+  await page.getByPlaceholder(/^Search /).fill(search)
+  await page.getByRole("option", { name: option }).first().click()
+}
+
 test("unauthenticated visitors are redirected to login", async ({ page }) => {
   for (const path of ["/admin", "/admin/organizers", "/admin/locations/new", "/admin/event-series", "/admin/event-series/new", "/admin/event-editions", "/admin/event-editions/new", "/admin/competitions", "/admin/competitions/new"]) {
     await page.goto(path)
@@ -59,7 +66,10 @@ test("location: validation, create, delete", async ({ page }) => {
   await page.getByRole("button", { name: "Create location" }).click()
   await expect(page.getByText("Country is required.")).toBeVisible()
 
-  await page.getByLabel("Country").fill("Venezuela")
+  // The country is chosen from a searchable list of all countries, not typed as free text.
+  await expect(page.getByRole("combobox", { name: "Country", exact: true })).toHaveText("Select a country…")
+  await pickSearchable(page, "Country", "venez", "Venezuela")
+  await expect(page.getByRole("combobox", { name: "Country", exact: true })).toHaveText("Venezuela")
   await page.getByLabel("City").fill(run)
   await page.getByRole("button", { name: "Create location" }).click()
   await expect(page.getByRole("status")).toHaveText("Location created.")
@@ -148,7 +158,11 @@ test("event edition: validation, inherited organizers, edit assignments, same-ye
   await page.getByLabel("Location").selectOption({ label: "E2E Venue, E2E City, Venezuela" })
   await page.getByLabel("E2E Org Gamma").check()
   await page.getByRole("button", { name: "Create edition" }).click()
-  await expect(page.getByRole("status")).toHaveText("Edition created.")
+  // A new edition continues on its edit page, where competitions can be added.
+  await page.waitForURL("**/edit?notice=created")
+  await expect(page.getByRole("status")).toContainText("Edition created.")
+  await page.goto("/admin/event-editions")
+  await hydrated(page)
 
   await page.getByLabel("Search editions").fill(run)
   await page.getByRole("button", { name: "Search" }).click()
@@ -181,7 +195,9 @@ test("event edition: validation, inherited organizers, edit assignments, same-ye
   await expect(page.getByRole("alert").filter({ hasText: "Add a label" })).toBeVisible()
   await page.getByLabel("Label").fill("II")
   await page.getByRole("button", { name: "Create edition" }).click()
-  await expect(page.getByRole("status")).toHaveText("Edition created.")
+  await page.waitForURL("**/edit?notice=created")
+  await page.goto("/admin/event-editions")
+  await hydrated(page)
 
   for (const editionName of [name, secondName]) {
     await page.getByLabel("Search editions").fill(run)
@@ -280,5 +296,95 @@ test("competition: validation, Trail Running metadata, edit, delete", async ({ p
   await page.getByRole("button", { name: `Delete ${unconfirmed}` }).click()
   await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click()
   await expect(page.getByRole("status")).toHaveText("Competition deleted.")
+})
+
+test("edition workflow: time zone, competitions added from the edition page, edit, delete", async ({ page }) => {
+  const editionName = `${run} Workflow`
+  const dialog = page.getByRole("dialog")
+  const addCompetition = async (name: string, startsOn: string) => {
+    await page.getByRole("button", { name: "Add competition" }).click()
+    await expect(dialog.getByText("Workflow", { exact: false }).first()).toBeVisible() // the edition is fixed, not chosen
+    await expect(dialog.getByLabel("Edition")).toHaveCount(0)
+    await dialog.getByLabel("Discipline").selectOption({ label: "E2E Sport · E2E Trail Running" })
+    await dialog.getByRole("textbox", { name: "Name" }).fill(name)
+    await dialog.getByLabel("Distance (km)").fill("10")
+    await dialog.getByLabel("Start date").fill(startsOn)
+    await dialog.getByRole("button", { name: "Create competition" }).click()
+    await expect(dialog).toBeHidden()
+  }
+
+  await page.goto("/admin/event-editions/new")
+  await hydrated(page)
+  await page.getByLabel("Series").selectOption({ label: "E2E Template Series" })
+
+  // The name is suggested from the series; once typed by hand, a series change no longer overwrites it.
+  await expect(page.getByLabel("Edition name")).toHaveValue("E2E Template Series")
+  await page.getByLabel("Edition name").fill(editionName)
+  await page.getByLabel("Series").selectOption({ label: "Select…" })
+  await page.getByLabel("Series").selectOption({ label: "E2E Template Series" })
+  await expect(page.getByLabel("Edition name")).toHaveValue(editionName)
+
+  // Helper text is tied to its field, so screen readers announce it with the input.
+  await expect(page.getByLabel("Edition year")).toHaveAccessibleDescription(/does not have to match/)
+  await expect(page.getByLabel("Label")).toHaveAccessibleDescription(/8th edition/)
+  await expect(page.getByLabel("Originally scheduled for")).toHaveAccessibleDescription(/first announced/)
+  await expect(page.getByLabel("Registration status")).toHaveAccessibleDescription(/does not require a URL/)
+  await page.getByLabel("Edition year").fill("2033")
+  await page.getByLabel("Start date").fill("2033-07-01")
+  await page.getByLabel("End date").fill("2033-07-03")
+
+  // New editions start in Venezuela's zone; the selector is searchable and keeps the IANA identifier.
+  await expect(page.getByRole("combobox", { name: "Time zone", exact: true })).toContainText("America/Caracas")
+  await pickSearchable(page, "Time zone", "bogota", /America\/Bogota/)
+  await expect(page.getByRole("combobox", { name: "Time zone", exact: true })).toContainText("America/Bogota")
+  await page.getByRole("button", { name: "Create edition" }).click()
+
+  // The edition is saved first, then its management page opens with an empty Competitions section.
+  await page.waitForURL("**/edit?notice=created")
+  await hydrated(page)
+  await expect(page.getByRole("status")).toContainText("Edition created.")
+  await expect(page.getByText("No competitions in this edition yet.")).toBeVisible()
+  await expect(page.getByRole("combobox", { name: "Time zone", exact: true })).toContainText("America/Bogota")
+
+  await addCompetition(`${run} 10K`, "2033-07-02")
+  await addCompetition(`${run} 5K`, "2033-07-03")
+  const section = page.getByRole("region", { name: "Competitions" })
+  await expect(section.getByRole("listitem")).toHaveCount(2)
+
+  // Validation comes from the shared Competition rules: a date outside the edition is rejected in the dialog.
+  await page.getByRole("button", { name: "Edit " + `${run} 5K` }).click()
+  await dialog.getByLabel("Start date").fill("2033-08-20")
+  await dialog.getByRole("button", { name: "Save changes" }).click()
+  await expect(dialog.getByText("The start date must fall within the edition dates.")).toBeVisible()
+  await dialog.getByLabel("Start date").fill("2033-07-01")
+  await dialog.getByLabel("Distance (km)").fill("5")
+  await dialog.getByRole("button", { name: "Save changes" }).click()
+  await expect(dialog).toBeHidden()
+
+  const editionPageUrl = page.url()
+
+  // After a reload both competitions are still attached to this edition, with the edit applied.
+  await page.reload()
+  await hydrated(page)
+  const fiveK = section.getByRole("listitem").filter({ hasText: `${run} 5K` })
+  await expect(section.getByRole("listitem")).toHaveCount(2)
+  await expect(fiveK).toContainText("5 km")
+  await expect(fiveK).toContainText("2033-07-01")
+  await expect(section.getByRole("listitem").filter({ hasText: `${run} 10K` })).toContainText("10 km")
+
+  // The standalone Competitions admin sees the same rows.
+  await page.goto("/admin/competitions")
+  await page.getByLabel("Search competitions").fill(`${run} 10K`)
+  await page.getByRole("button", { name: "Search" }).click()
+  await page.waitForURL(/q=/)
+  await expect(page.getByRole("row", { name: new RegExp(`${run} 10K`) })).toContainText(editionName)
+
+  // Delete from the edition page without leaving it.
+  await page.goto(editionPageUrl)
+  await hydrated(page)
+  await page.getByRole("button", { name: `Delete ${run} 10K` }).click()
+  await dialog.getByRole("button", { name: "Delete" }).click()
+  await expect(section.getByRole("listitem")).toHaveCount(1)
+  await expect(page).toHaveURL(/\/edit/)
 })
 })

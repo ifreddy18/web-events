@@ -200,3 +200,49 @@ export async function listLocationOptions() {
     label: [location.venueName, location.city, location.state, location.country].filter(Boolean).join(", "),
   }))
 }
+
+/**
+ * Active competitions of one edition for the edition screen, ordered like the standalone list.
+ * Each item carries what the list shows plus the form-ready values the edit dialog starts from, so the
+ * dialog needs no extra request. Dates are `YYYY-MM-DD` strings, as everywhere else.
+ */
+export async function listEditionCompetitions(eventEditionId: string) {
+  if (!competitionIdSchema.safeParse(eventEditionId).success) return []
+  const rows = await prisma.competition.findMany({
+    where: { eventEditionId, deletedAt: null },
+    orderBy: [{ startsOn: { sort: "asc", nulls: "last" } }, { startTime: { sort: "asc", nulls: "last" } }, { name: "asc" }, { id: "asc" }],
+    take: 200,
+    include: { discipline: { select: { name: true, slug: true } } },
+  })
+  return rows.map((row) => {
+    const metadata = row.metadata as Record<string, unknown> | null
+    return {
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+      status: row.status,
+      participationType: row.participationType,
+      disciplineName: row.discipline.name,
+      /** Only Trail Running stores a distance today; other disciplines have none to show. */
+      distanceKm: typeof metadata?.distanceKm === "number" ? metadata.distanceKm : null,
+      startsOn: localDateFromDb(row.startsOn),
+      startTime: row.startTime,
+      disciplineId: row.disciplineId,
+      metadata: row.metadata,
+      form: {
+        eventEditionId: row.eventEditionId,
+        name: row.name,
+        slug: row.slug,
+        description: row.description ?? "",
+        status: row.status,
+        participationType: row.participationType,
+        startsOn: localDateFromDb(row.startsOn) ?? "",
+        endsOn: localDateFromDb(row.endsOn) ?? "",
+        startTime: row.startTime ?? "",
+        endTime: row.endTime ?? "",
+        locationId: row.locationId ?? "",
+        registrationUrl: row.registrationUrl ?? "",
+      },
+    }
+  })
+}

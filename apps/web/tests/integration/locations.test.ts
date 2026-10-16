@@ -164,6 +164,27 @@ describe("update", () => {
   })
 })
 
+describe("country compatibility", () => {
+  it("keeps a legacy country text untouched when other fields are edited", async () => {
+    const id = await create("legacy-country", { country: "venezuela" })
+    const r = await updateLocation(id, valid("legacy-country", { country: "venezuela", address: "Av. 2" }))
+    expect(r.ok).toBe(true)
+    expect(await db.location.findUniqueOrThrow({ where: { id } })).toMatchObject({ country: "venezuela", address: "Av. 2" })
+  })
+
+  it("treats the selector's name and legacy casing as the same place", async () => {
+    await create("country-case", { country: "Venezuela" })
+    const r = await createLocation({ country: "venezuela", city: `${P}country-case`, slug: `${P}country-case-b` })
+    expect(r).toMatchObject({ ok: false, error: { code: "conflict" } })
+  })
+
+  it("derives the same slug from a selected country name as before", async () => {
+    const r = await createLocation({ country: "Venezuela", city: `${P}Slug City` })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(await db.location.findUniqueOrThrow({ where: { id: r.data.id } })).toMatchObject({ slug: `${P}slug-city-venezuela`.replace(/_/g, "-") })
+  })
+})
+
 describe("soft delete", () => {
   it("marks the row deleted, keeps it in the table and hides it from reads", async () => {
     const id = await create("del")

@@ -713,3 +713,32 @@ describe("listing", () => {
     expect(item?.locationLabel).toContain(`${P}Parque`)
   })
 })
+
+describe("historical editions", () => {
+  const yearsInInsertionOrder = [2026, 2027, 2024, 2023, 2025]
+
+  it("accepts older editions after newer ones and keeps each edition's own year and label", async () => {
+    for (const year of yearsInInsertionOrder) await create(`history-${year}`, { year, label: `Edition ${year}` })
+    const rows = await db.eventEdition.findMany({ where: { slug: { startsWith: `${P}${KEY}history-` } } })
+    expect(rows).toHaveLength(5)
+    for (const row of rows) expect([row.year, row.label]).toEqual([Number(row.slug.slice(-4)), `Edition ${row.slug.slice(-4)}`])
+  })
+
+  it("lists editions by year, newest first, whatever order they were created in", async () => {
+    for (const year of yearsInInsertionOrder) await create(`order-${year}`, { year })
+    const { items } = await listEventEditions({ q: `${P}${KEY}order-` })
+    expect(items.map((item) => item.year)).toEqual([2027, 2026, 2025, 2024, 2023])
+  })
+
+  it("orders editions of the same year by event date, then name, not by creation", async () => {
+    await create("same-year-late", { year: 2024, label: "Late", startsOn: "2024-11-01" })
+    await create("same-year-early", { year: 2024, label: "Early", startsOn: "2024-03-01" })
+    const { items } = await listEventEditions({ q: `${P}${KEY}same-year-` })
+    expect(items.map((item) => item.label)).toEqual(["Late", "Early"]) // startsOn descending
+  })
+
+  it("keeps the edition year independent from the celebration year", async () => {
+    const id = await create("postponed", { year: 2026, startsOn: "2027-02-14", rescheduledFromOn: "2026-11-01", status: "POSTPONED" })
+    expect(await getEventEdition(id)).toMatchObject({ year: 2026, startsOn: "2027-02-14", rescheduledFromOn: "2026-11-01" })
+  })
+})

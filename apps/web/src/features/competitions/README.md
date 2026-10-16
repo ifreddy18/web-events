@@ -1,7 +1,8 @@
 # Competitions
 
 Admin CRUD for `Competition`: one race or category inside an `EventEdition` (e.g. "21K", "Recreational 5K").
-Routes: `/admin/competitions`, `/new`, `/[id]/edit`. Results and athletes are separate, later features.
+Routes: `/admin/competitions`, `/new`, `/[id]/edit`, plus the Competitions section on the edition edit page.
+Results and athletes are separate, later features.
 
 ## Responsibilities
 
@@ -9,6 +10,17 @@ Routes: `/admin/competitions`, `/new`, `/[id]/edit`. Results and athletes are se
 - Validate the schedule, references, slug and discipline metadata; map conflicts to `ActionResult` errors.
 - Own `rules.ts` (shared with the EventEdition feature) and `metadata.ts` (also used by client form code).
 - It does **not** create Editions, Disciplines or Locations, and does not touch Results.
+
+## Two entry points, one implementation
+
+- **Standalone admin** (`/admin/competitions`): cross-edition search and filters; the edition is chosen on create.
+- **Edition screen** (`EditionCompetitions` on `/admin/event-editions/[id]/edit`): lists that edition's competitions
+  (`listEditionCompetitions`) and creates/edits them in a dialog with the edition fixed; deleting stays on the page.
+  This is the faster path when entering an event.
+- Both render the same `CompetitionForm` and call the same `createCompetition` / `updateCompetition` /
+  `deleteCompetition`. The embedded mode is just `onSaved` + `onCancel` props (no navigation). There is no second CRUD;
+  do not add rules to the dialog. Form element ids are prefixed per instance because the form shares a page with the
+  edition form.
 
 ## Relationships
 
@@ -111,5 +123,6 @@ Every action calls `denied()` (`requireAdmin()`) first; the admin layout is navi
   with `holdTransaction`, a second transaction that holds the lock or uncommitted row another admin's write would hold;
   `staysBlocked` asserts the action really waits. The suite needs a discipline with the real slug `trail-running`; it
   creates one under an `itest-` sport and `cleanupFixtures` removes it only from there.
-- E2E (`tests/e2e/admin-forms.smoke.spec.ts`): one journey using fixtures from `scripts/e2e-admin.ts` (fixture edition,
+- Integration also covers `listEditionCompetitions` (scoping to the edition, deleted rows, same rules from the edition screen).
+- E2E (`tests/e2e/admin-forms.smoke.spec.ts`): the standalone journey plus the edition-screen journey, using fixtures from `scripts/e2e-admin.ts` (fixture edition,
   trail discipline, venue). Wait for hydration after GET-form searches before clicking dialogs.

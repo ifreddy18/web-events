@@ -77,7 +77,10 @@ export function EventSeriesForm({
         {errors[name].join(" ")}
       </p>
     )
-  const a11y = (name: string) => ({ "aria-invalid": !!errors[name], "aria-describedby": errors[name] ? `${name}-error` : undefined })
+  const a11y = (name: string, hasHint = false) => ({
+    "aria-invalid": !!errors[name],
+    "aria-describedby": [hasHint && `${name}-hint`, errors[name] && `${name}-error`].filter(Boolean).join(" ") || undefined,
+  })
 
   const text = (name: keyof Values, label: string, opts: { required?: boolean; hint?: string; multiline?: boolean } = {}) => (
     <div key={name} className="space-y-1.5">
@@ -86,11 +89,15 @@ export function EventSeriesForm({
         {opts.required && <span aria-hidden> *</span>}
       </label>
       {opts.multiline ? (
-        <Textarea id={name} name={name} rows={4} defaultValue={(initial?.[name] as string) ?? ""} {...a11y(name)} />
+        <Textarea id={name} name={name} rows={4} defaultValue={(initial?.[name] as string) ?? ""} {...a11y(name, !!opts.hint)} />
       ) : (
-        <Input id={name} name={name} defaultValue={(initial?.[name] as string) ?? ""} {...a11y(name)} />
+        <Input id={name} name={name} defaultValue={(initial?.[name] as string) ?? ""} {...a11y(name, !!opts.hint)} />
       )}
-      {opts.hint && !errors[name] && <p className="text-xs text-muted-foreground">{opts.hint}</p>}
+      {opts.hint && (
+        <p id={`${name}-hint`} className="text-xs text-muted-foreground">
+          {opts.hint}
+        </p>
+      )}
       {error(name)}
     </div>
   )
@@ -99,7 +106,7 @@ export function EventSeriesForm({
 
   return (
     <form onSubmit={onSubmit} noValidate className="max-w-2xl space-y-4">
-      {text("name", "Name", { required: true })}
+      {text("name", "Name", { required: true, hint: "The event as a whole, without a year, e.g. “Gulima Trail Running”. Each yearly occurrence is an edition." })}
       {text("slug", "Slug", {
         hint: id ? "Used in public URLs. Changing it changes the URL." : "Leave empty to generate from the name.",
       })}
@@ -126,11 +133,14 @@ export function EventSeriesForm({
           <label htmlFor="status" className="text-sm font-medium">
             Status
           </label>
-          <select id="status" name="status" defaultValue={initial?.status ?? "ACTIVE"} className={selectClass}>
+          <select id="status" name="status" defaultValue={initial?.status ?? "ACTIVE"} className={selectClass} aria-describedby="status-hint">
             <option value="ACTIVE">Active</option>
             <option value="ARCHIVED">Archived</option>
             <option value="CANCELLED">Cancelled</option>
           </select>
+          <p id="status-hint" className="text-xs text-muted-foreground">
+            Archived and cancelled series stay selectable for new editions but are marked in the list.
+          </p>
         </div>
       </div>
 
@@ -143,7 +153,7 @@ export function EventSeriesForm({
       <fieldset className="space-y-4 rounded-md border p-4">
         <legend className="px-1 text-sm font-medium">Usual organizers</legend>
         <p className="text-xs text-muted-foreground">
-          Template for future editions. Editions keep their own organizers once created.
+          Template for future editions: exactly one primary organizer, co-organizers optional. Editions keep their own organizers once created.
         </p>
         <div className="space-y-1.5">
           <label htmlFor="primaryOrganizerId" className="text-sm font-medium">

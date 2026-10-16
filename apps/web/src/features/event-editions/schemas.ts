@@ -48,6 +48,7 @@ const editionFields = {
     .string()
     .optional()
     .transform((value) => clean(value ?? "") || DEFAULT_TIME_ZONE)
+    .refine((value) => !/^[+-]/.test(value), "Use a time zone name such as America/Caracas, not a UTC offset.")
     .refine(isValidTimeZone, "Enter a valid IANA time zone (e.g. America/Caracas)."),
   rescheduledFromOn: optionalLocalDate,
   registrationOpenAt: optionalLocalDateTime,

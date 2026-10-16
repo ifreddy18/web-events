@@ -139,6 +139,7 @@ export async function listSeriesOptions() {
   })
   return rows.map((series) => ({
     id: series.id,
+    name: series.name,
     label: series.status === "ACTIVE" ? series.name : `${series.name} (${series.status.toLowerCase()})`,
     primaryOrganizerId: series.organizers.find((o) => o.role === "PRIMARY")?.organizerId ?? "",
     coOrganizerIds: series.organizers.filter((o) => o.role === "CO_ORGANIZER").map((o) => o.organizerId),

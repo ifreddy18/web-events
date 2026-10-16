@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation"
 import { useState, type FormEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { SearchableSelect } from "@/components/searchable-select"
 import type { ActionResult, FieldErrors } from "@/shared/action-result"
+import { buildCountryGroups } from "@/shared/countries"
 import { createLocation, updateLocation } from "../actions"
 
 type Values = {
@@ -20,11 +22,10 @@ type Values = {
 }
 
 const FIELDS: { name: keyof Values; label: string; hint?: string; required?: boolean; inputMode?: "decimal" }[] = [
-  { name: "country", label: "Country", required: true },
   { name: "state", label: "State / region" },
   { name: "city", label: "City" },
-  { name: "venueName", label: "Venue name" },
-  { name: "address", label: "Address" },
+  { name: "venueName", label: "Venue name", hint: "The place people know it by, e.g. “Parque del Este”." },
+  { name: "address", label: "Address", hint: "Street address or directions to the venue." },
   { name: "latitude", label: "Latitude", hint: "-90 to 90", inputMode: "decimal" },
   { name: "longitude", label: "Longitude", hint: "-180 to 180", inputMode: "decimal" },
 ]
@@ -58,6 +59,8 @@ export function LocationForm({ id, initial }: { id?: string; initial?: Partial<V
     setFormError(result.error.code === "validation" ? null : result.error.message)
   }
 
+  const countryGroups = buildCountryGroups(initial?.country)
+
   const field = (name: keyof Values, label: string, opts: { required?: boolean; hint?: string; inputMode?: "decimal" } = {}) => (
     <div key={name} className="space-y-1.5">
       <label htmlFor={name} className="text-sm font-medium">
@@ -71,9 +74,13 @@ export function LocationForm({ id, initial }: { id?: string; initial?: Partial<V
         required={opts.required}
         inputMode={opts.inputMode}
         aria-invalid={!!errors[name]}
-        aria-describedby={errors[name] ? `${name}-error` : undefined}
+        aria-describedby={[opts.hint && `${name}-hint`, errors[name] && `${name}-error`].filter(Boolean).join(" ") || undefined}
       />
-      {opts.hint && !errors[name] && <p className="text-xs text-muted-foreground">{opts.hint}</p>}
+      {opts.hint && (
+        <p id={`${name}-hint`} className="text-xs text-muted-foreground">
+          {opts.hint}
+        </p>
+      )}
       {errors[name] && (
         <p id={`${name}-error`} className="text-sm text-destructive">
           {errors[name].join(" ")}
@@ -85,6 +92,27 @@ export function LocationForm({ id, initial }: { id?: string; initial?: Partial<V
   return (
     <form onSubmit={onSubmit} noValidate className="max-w-2xl space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <label htmlFor="country" className="text-sm font-medium">
+            Country <span aria-hidden>*</span>
+          </label>
+          <SearchableSelect
+            id="country"
+            name="country"
+            groups={countryGroups}
+            defaultValue={initial?.country ?? ""}
+            placeholder="Select a country…"
+            searchPlaceholder="Search countries…"
+            emptyMessage="No country found."
+            invalid={!!errors.country}
+            describedBy={errors.country ? "country-error" : undefined}
+          />
+          {errors.country && (
+            <p id="country-error" className="text-sm text-destructive">
+              {errors.country.join(" ")}
+            </p>
+          )}
+        </div>
         {FIELDS.map((f) => field(f.name, f.label, f))}
       </div>
       {field("slug", "Slug", {

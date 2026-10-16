@@ -11,6 +11,7 @@
 - **Stage 9 done:** EventEdition admin CRUD (see "Stage 9" at the end).
 - **Stage 10 done:** Competition admin CRUD (see "Stage 10" at the end).
 - **Stage 10.6 done:** Admin navigation shell (see "Stage 10.6" at the end).
+- **Stage 10.7 done:** Admin data-entry UX: selectors, inline competitions, contextual help, name autofill (see "Stage 10.7" at the end).
 
 **Status:** Proposal, nothing applied. Baseline: `main` @ `c4d8605` (Prisma v2.2 docs approved); v1 preserved on `main_v1`.
 **Inputs inspected:** `apps/web` tree, `package.json`, configs (`prisma.config.ts`, `tsconfig.json`, `components.json`, `next.config.ts`), `src/server/db/prisma.tsx`, v2.2 proposal files (`schema_v2_2.prisma`, `_decisions.md`, `_constraints.sql`).
@@ -364,3 +365,25 @@ Persistent navigation for all `/admin` pages. Files: `src/features/admin-shell/n
 **Tests.** Unit: `admin-navigation.test.ts` (config, active detection, nested routes, breadcrumbs). E2E: `admin-navigation.smoke.spec.ts` (sidebar navigation without reload, active items, create-page breadcrumbs, mobile drawer and no horizontal overflow). Test infrastructure: global setup now signs in once and shares `storageState` (Better Auth limits sign-in to 5/min and the suite needed more); Playwright runs with `workers: 1` because parallel files made `next dev` reload pages mid-test; the forms spec's Edit-link locator became `exact` because the sidebar now has an "Event Editions" link.
 
 **Limitations.** Sidebar is not collapsible; section labels are not links; breadcrumbs on a record show "Edit" without the record name.
+
+## Stage 10.7 — Admin data entry UX (complete)
+
+Three usability fixes found while entering real events. No schema, migration, auth or business-rule changes.
+
+**Decisions**
+- *Selector component:* one `SearchableSelect` (`src/components/searchable-select.tsx`: shadcn Popover + Command, hidden input so `FormData` forms keep working, `role="combobox"` trigger labelled by a normal `<label>`). Groups: "Current value", "Latin America", then everything else.
+- *Time zone:* options come from `Intl.supportedValuesOf("timeZone")` plus a Latin American priority list (`src/shared/time-zones.ts`); Caracas first and the default for new editions. Only the IANA identifier is stored; the offset in the label is computed for display. A stored value the runtime does not list (e.g. `UTC`) is offered as "Current value", so editing never rewrites it. Schema change: `timeZone` now also rejects fixed offsets (`-04:00`), which `Intl` would otherwise accept.
+- *Country:* a fixed ISO 3166-1 table (249 names, `src/shared/countries.ts`) instead of `Intl.DisplayNames`, so names cannot drift between ICU versions. The stored value stays the plain English name (`Venezuela`), identical to existing rows, so slugs, duplicate checks and filters are unchanged. The server schema still accepts any non-empty text on purpose: legacy rows (e.g. `venezuela`) must stay editable, and they are shown as "Current value" and never renamed. New locations have no default country.
+- *Competitions in the edition screen:* `EditionCompetitions` renders the edition's competitions and hosts the existing `CompetitionForm` in a dialog with the edition fixed. The form, schemas, rules, metadata validation and Server Actions are the standalone feature's; `CompetitionForm` only gained `onSaved`/`onCancel` (stay on the page instead of navigating) and per-instance element ids (it now shares a page with the edition form). `DeleteCompetitionButton` gained `onDeleted`. The standalone `/admin/competitions` routes remain the cross-edition overview and still work for every competition.
+- *New editions:* saving an edition no longer returns to the list; it opens the edition's edit page (`?notice=created`) so competitions can be added at once. Two separate saves, no combined transaction.
+
+**Tests.** Unit: time zone options and validation, country table and compatibility. Integration: legacy country text survives edits and duplicates stay detected; `listEditionCompetitions` scopes to the edition, hides deleted rows, and creation from the edition screen applies the same schedule, slug and authorization rules. E2E: new journey (time zone default and search, create edition, add two competitions in the dialog, rule error in the dialog, edit, reload, standalone list shows the same rows, delete in place); the location journey now uses the country selector and the edition journeys expect the redirect to the edit page.
+
+**Limitations.** The edition screen lists at most 200 competitions. Only the edition's competitions are edited there (no moving between editions). The country selector does not validate against the table on the server. Offsets in time zone labels reflect "now", not the event date. Editions and locations are still native selects elsewhere.
+
+**Stage 10.7 completion (contextual help, name autofill, historical editions).**
+- *Help:* helper text below non-obvious fields in the Edition, Competition, Location and Series forms, associated via `aria-describedby`, always visible (no hover-only tooltips). Edition form regrouped (General information, Status, Event schedule, Postponement, Registration and results, Organizers); registration status moved next to the registration dates. Wording only restates existing rules (edition year vs. dates, OPEN without URL, inheritance, times never inherited).
+- *Name autofill:* creating an edition suggests the selected series' name through `editionNameReducer`; manual input is never overwritten, clearing does not restore it, edit pages keep the saved name. No year/label appended, slug rules unchanged.
+- *Historical editions:* confirmed no query or rule depends on insertion order; listing is `year desc, startsOn desc, name, id`. Documented in the Event editions README; regression tests insert 2026, 2027, 2024, 2023, 2025. No schema change, no `editionNumber`.
+- *Tests added:* 6 unit (name suggestion), 4 integration (historical editions), E2E assertions for autofill and accessible descriptions.
+- *Limitation:* help text is static English; the series status hint only describes what the picker does because the schema defines no further semantics.

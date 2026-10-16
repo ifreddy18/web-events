@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/dialog"
 import { deleteCompetition } from "../actions"
 
-export function DeleteCompetitionButton({ id, label }: { id: string; label: string }) {
+/** `onDeleted` keeps the admin on the current screen (the edition page); without it the standalone list is shown. */
+export function DeleteCompetitionButton({ id, label, onDeleted }: { id: string; label: string; onDeleted?: () => void }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -27,6 +28,10 @@ export function DeleteCompetitionButton({ id, label }: { id: string; label: stri
       const result = await deleteCompetition(id)
       if (result.ok) {
         setOpen(false)
+        if (onDeleted) {
+          onDeleted()
+          return
+        }
         router.push("/admin/competitions?notice=deleted")
         router.refresh()
         return

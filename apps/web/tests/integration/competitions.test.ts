@@ -13,7 +13,7 @@ vi.mock("@/server/auth/session", async (importActual) => {
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 
 const { createCompetition, updateCompetition, deleteCompetition } = await import("@/features/competitions/actions")
-const { listCompetitions, getCompetition, listEditionOptions, listDisciplineOptions } = await import("@/features/competitions/queries")
+const { listCompetitions, listEditionCompetitions, getCompetition, listEditionOptions, listDisciplineOptions } = await import("@/features/competitions/queries")
 const { updateEventEdition, deleteEventEdition } = await import("@/features/event-editions/actions")
 const { getEventEdition } = await import("@/features/event-editions/queries")
 
@@ -767,5 +767,46 @@ describe("listing", () => {
     await create("shown", { startsOn: "2030-05-11", endsOn: "2030-05-12", startTime: "07:00" })
     const { items } = await listCompetitions({ eventEditionId: editionId })
     expect(items[0]).toMatchObject({ effectiveStartsOn: "2030-05-11", effectiveEndsOn: "2030-05-12", startTime: "07:00", datesInherited: false })
+  })
+})
+
+describe("edition screen (competitions of one edition)", () => {
+  it("creates competitions under the given edition and lists only that edition's active competitions", async () => {
+    const first = await create("edition-a", { startsOn: "2030-05-11" })
+    const second = await create("edition-b")
+    const elsewhere = await create("edition-c", { eventEditionId: otherEditionId })
+    const deleted = await create("edition-d")
+    await deleteCompetition(deleted)
+
+    const listed = await listEditionCompetitions(editionId)
+    expect(listed.map((competition) => competition.id).sort()).toEqual([first, second].sort())
+    expect(listed.map((competition) => competition.id)).not.toContain(elsewhere)
+    expect((await listEditionCompetitions(otherEditionId)).map((competition) => competition.id)).toEqual([elsewhere])
+    expect(await storedRow(first)).toMatchObject({ eventEditionId: editionId })
+  })
+
+  it("returns form-ready values and the trail distance for the edit dialog", async () => {
+    const id = await create("edition-trail", { disciplineId: trailDisciplineId, metadata: { distanceKm: 21.5 }, startsOn: "2030-05-11", startTime: "06:30" })
+    const [item] = await listEditionCompetitions(editionId)
+    expect(item).toMatchObject({ id, distanceKm: 21.5, startsOn: "2030-05-11", form: { eventEditionId: editionId, startsOn: "2030-05-11", startTime: "06:30", endsOn: "" } })
+  })
+
+  it("applies the same schedule and slug rules as the standalone form", async () => {
+    const outsideWindow = await createCompetition(valid("edition-outside", { startsOn: "2030-06-20" }))
+    expect(outsideWindow).toMatchObject({ ok: false, error: { code: "validation" } })
+    await create("edition-dup")
+    expect(await createCompetition(valid("edition-dup"))).toMatchObject({ ok: false, error: { code: "conflict" } })
+    expect(await listEditionCompetitions(editionId)).toHaveLength(1)
+  })
+
+  it("returns nothing for a malformed or unknown edition id", async () => {
+    expect(await listEditionCompetitions("not-a-uuid")).toEqual([])
+    expect(await listEditionCompetitions(randomUuid)).toEqual([])
+  })
+
+  it("still requires an admin to create a competition", async () => {
+    currentHeaders = userHeaders
+    expect(await createCompetition(valid("edition-denied"))).toMatchObject({ ok: false, error: { code: "forbidden" } })
+    currentHeaders = adminHeaders
   })
 })

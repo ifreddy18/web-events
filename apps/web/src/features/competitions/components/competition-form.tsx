@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useState, type FormEvent } from "react"
+import { useId, useState, type FormEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -45,6 +45,8 @@ function describeEditionDates(edition: EditionOption | undefined) {
 
 /**
  * Create and edit form. The parent edition is chosen on create and fixed afterwards (shown read-only).
+ * Embedded in the edition screen (`onSaved` set), the edition is fixed from the start and the form reports
+ * back to its host instead of navigating away.
  * Empty dates and location are inherited from the edition; times are never inherited.
  * Metadata fields appear only for disciplines that have a schema; the server decides what is valid.
  */
@@ -56,6 +58,8 @@ export function CompetitionForm({
   editions,
   disciplines,
   locations,
+  onSaved,
+  onCancel,
 }: {
   id?: string
   initial?: Partial<Values> & { eventEditionId?: string }
@@ -66,8 +70,15 @@ export function CompetitionForm({
   editions: EditionOption[]
   disciplines: DisciplineOption[]
   locations: Option[]
+  /** Set when the form lives in a dialog on the edition screen; called after a successful save. */
+  onSaved?: () => void
+  /** Replaces the "Cancel" link to the standalone list; required when `onSaved` is set. */
+  onCancel?: () => void
 }) {
   const router = useRouter()
+  // Prefixes element ids: this form can sit on the same page as the edition form, which shares field names.
+  const formId = useId()
+  const fieldId = (name: string) => `${formId}-${name}`
   const [errors, setErrors] = useState<FieldErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
@@ -107,6 +118,10 @@ export function CompetitionForm({
       return
     }
     if (result.ok) {
+      if (onSaved) {
+        onSaved()
+        return
+      }
       router.push(`/admin/competitions?notice=${id ? "updated" : "created"}`)
       router.refresh()
       return
@@ -118,54 +133,67 @@ export function CompetitionForm({
 
   const error = (name: string) =>
     errors[name] && (
-      <p id={`${name}-error`} className="text-sm text-destructive">
+      <p id={fieldId(`${name}-error`)} className="text-sm text-destructive">
         {errors[name].join(" ")}
       </p>
     )
-  const a11y = (name: string) => ({ "aria-invalid": !!errors[name], "aria-describedby": errors[name] ? `${name}-error` : undefined })
+  // Helper text stays visible next to the input and is announced with it; an error is announced after it.
+  const a11y = (name: string, hasHint = false) => ({
+    "aria-invalid": !!errors[name],
+    "aria-describedby": [hasHint && fieldId(`${name}-hint`), errors[name] && fieldId(`${name}-error`)].filter(Boolean).join(" ") || undefined,
+  })
+  const hint = (name: string, text?: string) =>
+    text && (
+      <p id={fieldId(`${name}-hint`)} className="text-xs text-muted-foreground">
+        {text}
+      </p>
+    )
 
   const field = (name: keyof Values, label: string, opts: { required?: boolean; hint?: string; type?: string } = {}) => (
     <div className="space-y-1.5">
-      <label htmlFor={name} className="text-sm font-medium">
+      <label htmlFor={fieldId(name)} className="text-sm font-medium">
         {label}
         {opts.required && <span aria-hidden> *</span>}
       </label>
-      <Input id={name} name={name} type={opts.type} defaultValue={initial?.[name] ?? ""} {...a11y(name)} />
-      {opts.hint && !errors[name] && <p className="text-xs text-muted-foreground">{opts.hint}</p>}
+      <Input id={fieldId(name)} name={name} type={opts.type} defaultValue={initial?.[name] ?? ""} {...a11y(name, !!opts.hint)} />
+      {hint(name, opts.hint)}
       {error(name)}
     </div>
   )
 
-  const choice = (name: "status" | "participationType", label: string, options: Option[]) => (
+  const choice = (name: "status" | "participationType", label: string, options: Option[], helpText?: string) => (
     <div className="space-y-1.5">
-      <label htmlFor={name} className="text-sm font-medium">
+      <label htmlFor={fieldId(name)} className="text-sm font-medium">
         {label}
       </label>
-      <select id={name} name={name} defaultValue={initial?.[name] ?? options[0].id} className={selectClass} {...a11y(name)}>
+      <select id={fieldId(name)} name={name} defaultValue={initial?.[name] ?? options[0].id} className={selectClass} {...a11y(name, !!helpText)}>
         {options.map((option) => (
           <option key={option.id} value={option.id}>
             {option.label}
           </option>
         ))}
       </select>
+      {hint(name, helpText)}
       {error(name)}
     </div>
   )
 
   return (
     <form onSubmit={onSubmit} noValidate className="max-w-3xl space-y-4">
-      {id ? (
+      {id || onSaved ? (
         <div className="space-y-1.5">
           <span className="text-sm font-medium">Edition</span>
           <p className="text-sm">{edition?.label}</p>
-          <p className="text-xs text-muted-foreground">The edition of a competition cannot be changed. Create a new competition in the other edition instead.</p>
+          {id && (
+            <p className="text-xs text-muted-foreground">The edition of a competition cannot be changed. Create a new competition in the other edition instead.</p>
+          )}
         </div>
       ) : (
         <div className="space-y-1.5">
-          <label htmlFor="eventEditionId" className="text-sm font-medium">
+          <label htmlFor={fieldId("eventEditionId")} className="text-sm font-medium">
             Edition <span aria-hidden>*</span>
           </label>
-          <select id="eventEditionId" value={editionId} onChange={(e) => setEditionId(e.target.value)} className={selectClass} {...a11y("eventEditionId")}>
+          <select id={fieldId("eventEditionId")} value={editionId} onChange={(e) => setEditionId(e.target.value)} className={selectClass} {...a11y("eventEditionId")}>
             <option value="">Select…</option>
             {editions.map((option) => (
               <option key={option.id} value={option.id}>
@@ -183,10 +211,10 @@ export function CompetitionForm({
       )}
 
       <div className="space-y-1.5">
-        <label htmlFor="disciplineId" className="text-sm font-medium">
+        <label htmlFor={fieldId("disciplineId")} className="text-sm font-medium">
           Discipline <span aria-hidden>*</span>
         </label>
-        <select id="disciplineId" value={disciplineId} onChange={(e) => setDisciplineId(e.target.value)} className={selectClass} {...a11y("disciplineId")}>
+        <select id={fieldId("disciplineId")} value={disciplineId} onChange={(e) => setDisciplineId(e.target.value)} className={selectClass} {...a11y("disciplineId")}>
           <option value="">Select…</option>
           {disciplines.map((option) => (
             <option key={option.id} value={option.id}>
@@ -219,19 +247,19 @@ export function CompetitionForm({
         {choice("participationType", "Participation", [
           { id: "COMPETITIVE", label: "Competitive" },
           { id: "RECREATIONAL", label: "Recreational" },
-        ])}
+        ], "Competitive, or recreational such as a fun run. Neither type requires results.")}
         {choice("status", "Status", [
           { id: "ACTIVE", label: "Active" },
           { id: "COMPLETED", label: "Completed" },
           { id: "CANCELLED", label: "Cancelled" },
-        ])}
+        ], "Whether this competition is still planned, already held, or called off. The edition has its own status.")}
       </div>
 
       <div className="space-y-1.5">
-        <label htmlFor="description" className="text-sm font-medium">
+        <label htmlFor={fieldId("description")} className="text-sm font-medium">
           Description
         </label>
-        <Textarea id="description" name="description" rows={3} defaultValue={initial?.description ?? ""} {...a11y("description")} />
+        <Textarea id={fieldId("description")} name="description" rows={3} defaultValue={initial?.description ?? ""} {...a11y("description")} />
         {error("description")}
       </div>
 
@@ -243,16 +271,16 @@ export function CompetitionForm({
         <div className="grid gap-4 sm:grid-cols-2">
           {field("startsOn", "Start date", { type: "date" })}
           {field("endsOn", "End date", { type: "date" })}
-          {field("startTime", "Start time", { type: "time" })}
+          {field("startTime", "Start time", { type: "time", hint: "Never inherited from the edition." })}
           {field("endTime", "End time", { type: "time" })}
         </div>
       </fieldset>
 
       <div className="space-y-1.5">
-        <label htmlFor="locationId" className="text-sm font-medium">
+        <label htmlFor={fieldId("locationId")} className="text-sm font-medium">
           Location
         </label>
-        <select id="locationId" name="locationId" defaultValue={initial?.locationId ?? ""} className={selectClass} {...a11y("locationId")}>
+        <select id={fieldId("locationId")} name="locationId" defaultValue={initial?.locationId ?? ""} className={selectClass} {...a11y("locationId", true)}>
           <option value="">{`Same as the edition${edition?.locationLabel ? ` (${edition.locationLabel})` : ""}`}</option>
           {locations.map((option) => (
             <option key={option.id} value={option.id}>
@@ -260,6 +288,7 @@ export function CompetitionForm({
             </option>
           ))}
         </select>
+        {hint("locationId", "Choose a place only if this competition is held somewhere other than the edition.")}
         {error("locationId")}
       </div>
 
@@ -277,9 +306,15 @@ export function CompetitionForm({
         <Button type="submit" disabled={pending}>
           {pending ? "Saving…" : id ? "Save changes" : "Create competition"}
         </Button>
-        <Button variant="outline" asChild>
-          <Link href="/admin/competitions">Cancel</Link>
-        </Button>
+        {onCancel ? (
+          <Button type="button" variant="outline" onClick={onCancel} disabled={pending}>
+            Cancel
+          </Button>
+        ) : (
+          <Button variant="outline" asChild>
+            <Link href="/admin/competitions">Cancel</Link>
+          </Button>
+        )}
       </div>
     </form>
   )

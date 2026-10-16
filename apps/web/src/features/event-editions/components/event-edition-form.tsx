@@ -2,11 +2,15 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useState, type FormEvent } from "react"
+import { useReducer, useState, type FormEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { SearchableSelect } from "@/components/searchable-select"
 import type { ActionResult, FieldErrors } from "@/shared/action-result"
+import { buildTimeZoneGroups } from "@/shared/time-zones"
 import { createEventEdition, updateEventEdition } from "../actions"
+import { editionNameReducer, initialEditionNameState } from "../name-suggestion"
+import { DEFAULT_TIME_ZONE } from "../schemas"
 
 type Values = {
   eventSeriesId: string
@@ -34,7 +38,7 @@ type Values = {
 
 type Option = { id: string; label: string }
 /** Organizers a series usually runs; copied into the form when a series is selected. */
-export type SeriesOption = Option & { primaryOrganizerId: string; coOrganizerIds: string[] }
+export type SeriesOption = Option & { name: string; primaryOrganizerId: string; coOrganizerIds: string[] }
 
 const selectClass =
   "h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive"
@@ -66,6 +70,10 @@ export function EventEditionForm({
   const [seriesId, setSeriesId] = useState(initial?.eventSeriesId ?? "")
   const [primary, setPrimary] = useState(initial?.primaryOrganizerId ?? "")
   const [coIds, setCoIds] = useState<string[]>(initial?.coOrganizerIds ?? [])
+  const [nameState, dispatchName] = useReducer(
+    editionNameReducer,
+    initialEditionNameState(initial?.name, series.find((s) => s.id === initial?.eventSeriesId)?.name),
+  )
 
   function applySeriesTemplate(selectedSeriesId: string) {
     const template = series.find((s) => s.id === selectedSeriesId)
@@ -92,7 +100,8 @@ export function EventEditionForm({
       return
     }
     if (result.ok) {
-      router.push(`/admin/event-editions?notice=${id ? "updated" : "created"}`)
+      // A new edition continues on its edit page, where competitions can be added right away.
+      router.push(id ? "/admin/event-editions?notice=updated" : `/admin/event-editions/${result.data.id}/edit?notice=created`)
       router.refresh()
       return
     }
@@ -107,7 +116,17 @@ export function EventEditionForm({
         {errors[name].join(" ")}
       </p>
     )
-  const a11y = (name: string) => ({ "aria-invalid": !!errors[name], "aria-describedby": errors[name] ? `${name}-error` : undefined })
+  // Helper text stays visible next to the input and is announced with it; an error is announced after it.
+  const a11y = (name: string, hasHint = false) => ({
+    "aria-invalid": !!errors[name],
+    "aria-describedby": [hasHint && `${name}-hint`, errors[name] && `${name}-error`].filter(Boolean).join(" ") || undefined,
+  })
+  const hint = (name: string, text?: string) =>
+    text && (
+      <p id={`${name}-hint`} className="text-xs text-muted-foreground">
+        {text}
+      </p>
+    )
 
   const field = (name: keyof Omit<Values, "coOrganizerIds">, label: string, opts: { required?: boolean; hint?: string; type?: string; inputMode?: "numeric" } = {}) => (
     <div key={name} className="space-y-1.5">
@@ -115,18 +134,18 @@ export function EventEditionForm({
         {label}
         {opts.required && <span aria-hidden> *</span>}
       </label>
-      <Input id={name} name={name} type={opts.type} inputMode={opts.inputMode} defaultValue={initial?.[name] ?? ""} {...a11y(name)} />
-      {opts.hint && !errors[name] && <p className="text-xs text-muted-foreground">{opts.hint}</p>}
+      <Input id={name} name={name} type={opts.type} inputMode={opts.inputMode} defaultValue={initial?.[name] ?? ""} {...a11y(name, !!opts.hint)} />
+      {hint(name, opts.hint)}
       {error(name)}
     </div>
   )
 
-  const choice = (name: keyof Values, label: string, options: Option[], opts: { empty?: string } = {}) => (
+  const choice = (name: keyof Values, label: string, options: Option[], opts: { empty?: string; hint?: string } = {}) => (
     <div className="space-y-1.5">
       <label htmlFor={name} className="text-sm font-medium">
         {label}
       </label>
-      <select id={name} name={name} defaultValue={(initial?.[name] as string | undefined) ?? options[0]?.id ?? ""} className={selectClass} {...a11y(name)}>
+      <select id={name} name={name} defaultValue={(initial?.[name] as string | undefined) ?? options[0]?.id ?? ""} className={selectClass} {...a11y(name, !!opts.hint)}>
         {opts.empty !== undefined && <option value="">{opts.empty}</option>}
         {options.map((o) => (
           <option key={o.id} value={o.id}>
@@ -134,10 +153,14 @@ export function EventEditionForm({
           </option>
         ))}
       </select>
+      {hint(name, opts.hint)}
       {error(name)}
     </div>
   )
 
+  // An existing edition keeps its stored zone; a new one starts in Venezuela's.
+  const timeZone = initial?.timeZone || DEFAULT_TIME_ZONE
+  const timeZoneGroups = buildTimeZoneGroups(timeZone)
   const coCandidates = organizers.filter((o) => o.id !== primary)
 
   return (
@@ -159,6 +182,8 @@ export function EventEditionForm({
             onChange={(e) => {
               setSeriesId(e.target.value)
               applySeriesTemplate(e.target.value)
+              const selectedSeries = series.find((s) => s.id === e.target.value)
+              if (selectedSeries) dispatchName({ type: "seriesSelected", seriesName: selectedSeries.name })
             }}
             className={selectClass}
             {...a11y("eventSeriesId")}
@@ -179,64 +204,128 @@ export function EventEditionForm({
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        {field("name", "Edition name", { required: true })}
-        {field("slug", "Slug", {
-          hint: id ? "Used in public URLs. Changing it changes the URL." : "Leave empty to generate from name, label and year.",
-        })}
-        {field("year", "Year", { required: true, inputMode: "numeric", hint: "Identifies the edition; it can differ from the start date's year." })}
-        {field("label", "Label", { hint: "Tells editions of the same year apart, e.g. “Spring” or “II”." })}
-      </div>
+      <fieldset className="space-y-4 rounded-md border p-4">
+        <legend className="px-1 text-sm font-medium">General information</legend>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <label htmlFor="name" className="text-sm font-medium">
+              Edition name <span aria-hidden>*</span>
+            </label>
+            <Input
+              id="name"
+              name="name"
+              value={nameState.value}
+              onChange={(e) => dispatchName({ type: "typed", value: e.target.value })}
+              {...a11y("name", true)}
+            />
+            {hint("name", id ? "Public name of this edition." : "Suggested from the series; change it freely. Do not add the year or edition number here.")}
+            {error("name")}
+          </div>
+          {field("slug", "Slug", {
+            hint: id ? "Used in public URLs. Changing it changes the URL." : "Leave empty to generate from name, label and year.",
+          })}
+          {field("year", "Edition year", {
+            required: true,
+            inputMode: "numeric",
+            hint: "The year this edition is known by. It identifies the edition and does not have to match the start date: a 2026 edition postponed to 2027 stays “2026”.",
+          })}
+          {field("label", "Label", {
+            hint: "Optional. Tells editions apart, e.g. “8th edition”, “Night edition” or “Anniversary”. Needed when a series has two editions in the same year. Nothing is calculated from it.",
+          })}
+        </div>
+        {choice("locationId", "Location", locations, { empty: "To be announced", hint: "Where the event takes place. Competitions inherit it unless they set their own." })}
+      </fieldset>
 
       <fieldset className="space-y-4 rounded-md border p-4">
         <legend className="px-1 text-sm font-medium">Status</legend>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {choice("publicationStatus", "Publication", [
-            { id: "DRAFT", label: "Draft" },
-            { id: "PUBLISHED", label: "Published" },
-          ])}
-          {choice("status", "Event status", [
-            { id: "SCHEDULED", label: "Scheduled" },
-            { id: "POSTPONED", label: "Postponed" },
-            { id: "COMPLETED", label: "Completed" },
-            { id: "CANCELLED", label: "Cancelled" },
-          ])}
-          {choice("registrationStatus", "Registration", [
-            { id: "UNKNOWN", label: "Unknown" },
-            { id: "NOT_OPEN", label: "Not open" },
-            { id: "OPEN", label: "Open" },
-            { id: "CLOSED", label: "Closed" },
-            { id: "SOLD_OUT", label: "Sold out" },
-          ])}
+        <div className="grid gap-4 sm:grid-cols-2">
+          {choice(
+            "publicationStatus",
+            "Publication",
+            [
+              { id: "DRAFT", label: "Draft" },
+              { id: "PUBLISHED", label: "Published" },
+            ],
+            { hint: "Whether the edition is visible to the public. It says nothing about the event itself." },
+          )}
+          {choice(
+            "status",
+            "Event status",
+            [
+              { id: "SCHEDULED", label: "Scheduled" },
+              { id: "POSTPONED", label: "Postponed" },
+              { id: "COMPLETED", label: "Completed" },
+              { id: "CANCELLED", label: "Cancelled" },
+            ],
+            { hint: "What happens to the event. Completed needs a start date." },
+          )}
         </div>
       </fieldset>
 
       <fieldset className="space-y-4 rounded-md border p-4">
-        <legend className="px-1 text-sm font-medium">Dates</legend>
+        <legend className="px-1 text-sm font-medium">Event schedule</legend>
         <p className="text-xs text-muted-foreground">
-          Leave the dates empty while they are to be announced. The end date is inclusive; set it for multi-day or overnight events.
+          When the event actually takes place. Leave the dates empty while they are to be announced. The end date is inclusive; set it for
+          multi-day or overnight events. A time of day or an end date needs a start date.
         </p>
         <div className="grid gap-4 sm:grid-cols-2">
           {field("startsOn", "Start date", { type: "date" })}
           {field("endsOn", "End date", { type: "date" })}
-          {field("startTime", "Start time", { type: "time" })}
+          {field("startTime", "Start time", { type: "time", hint: "Local time in the time zone below." })}
           {field("endTime", "End time", { type: "time" })}
-          {field("timeZone", "Time zone", { hint: "IANA name. Defaults to America/Caracas." })}
-          {field("rescheduledFromOn", "Originally scheduled for", { type: "date", hint: "Set when the event was moved to a new date." })}
+          <div className="space-y-1.5">
+            <label htmlFor="timeZone" className="text-sm font-medium">
+              Time zone
+            </label>
+            <SearchableSelect
+              id="timeZone"
+              name="timeZone"
+              groups={timeZoneGroups}
+              defaultValue={timeZone}
+              searchPlaceholder="Search time zones…"
+              emptyMessage="No time zone found."
+              invalid={!!errors.timeZone}
+              describedBy={[!errors.timeZone && "timeZone-hint", errors.timeZone && "timeZone-error"].filter(Boolean).join(" ") || undefined}
+            />
+            {!errors.timeZone && hint("timeZone", "Where the event happens. Registration times are entered in this zone. Defaults to Caracas.")}
+            {error("timeZone")}
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset className="space-y-4 rounded-md border p-4">
+        <legend className="px-1 text-sm font-medium">Postponement</legend>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {field("rescheduledFromOn", "Originally scheduled for", {
+            type: "date",
+            hint: "Only if the event was moved: the date it was first announced. The current date stays in “Start date”.",
+          })}
         </div>
       </fieldset>
 
       <fieldset className="space-y-4 rounded-md border p-4">
         <legend className="px-1 text-sm font-medium">Registration and results</legend>
+        <p className="text-xs text-muted-foreground">Registration dates are separate from the event dates above.</p>
         <div className="grid gap-4 sm:grid-cols-2">
+          {choice(
+            "registrationStatus",
+            "Registration status",
+            [
+              { id: "UNKNOWN", label: "Unknown" },
+              { id: "NOT_OPEN", label: "Not open" },
+              { id: "OPEN", label: "Open" },
+              { id: "CLOSED", label: "Closed" },
+              { id: "SOLD_OUT", label: "Sold out" },
+            ],
+            { hint: "Open does not require a URL: people may register by WhatsApp, Instagram, phone or in person." },
+          )}
+          <div aria-hidden className="hidden sm:block" />
           {field("registrationOpenAt", "Registration opens", { type: "datetime-local", hint: "In the edition's time zone." })}
           {field("registrationCloseAt", "Registration closes", { type: "datetime-local", hint: "In the edition's time zone." })}
-          {field("registrationUrl", "Registration URL", { hint: "https://…" })}
-          {field("resultsUrl", "Results URL", { hint: "https://…" })}
+          {field("registrationUrl", "Registration URL", { hint: "Optional link to register online. https://…" })}
+          {field("resultsUrl", "Results URL", { hint: "Optional link to the published results. https://…" })}
         </div>
       </fieldset>
-
-      {choice("locationId", "Location", locations, { empty: "To be announced" })}
 
       <fieldset className="space-y-4 rounded-md border p-4">
         <legend className="px-1 text-sm font-medium">Organizers</legend>

@@ -1,14 +1,15 @@
 # Event editions
 
 Admin CRUD for `EventEdition`: one occurrence of an `EventSeries` (e.g. "Maratón del Sol 2030, Primavera").
-Routes: `/admin/event-editions`, `/new`, `/[id]/edit`. Competitions are a separate feature (`features/competitions`).
+Routes: `/admin/event-editions`, `/new`, `/[id]/edit`. Competitions are a separate feature (`features/competitions`),
+but the edit page embeds its Competitions section (see below).
 
 ## Responsibilities
 
 - Create, edit, list (search, filters, pagination) and soft-delete editions.
 - Own the edition's organizer assignments (`EventEditionOrganizer`).
 - Validate dates, statuses and references; map conflicts to `ActionResult` errors.
-- It does **not** create or edit Locations, Series, Organizers or Competitions.
+- It does **not** create or edit Locations, Series, Organizers or Competitions itself; the edit page only hosts the Competitions feature's section.
 
 ## Identity: several editions per series and year
 
@@ -42,6 +43,40 @@ The series cannot be changed after creation.
 - The rules live in `rules.ts` and mirror the SQL CHECKs so the user gets field errors instead of a DB error.
 - Changing the dates re-validates the edition's active competitions with `competitions/rules.ts`
   (only when the dates actually change).
+
+## Name, label and historical editions
+
+- **Name** is the public name of the edition (usually the series name). **Label** is an optional free-text identifier such as
+  "8th edition", "Night edition" or "Anniversary"; it is only required to tell two editions of one series and year apart.
+  The year and label are never appended to the name automatically.
+- **Name autofill (create only).** Selecting a series suggests its name (`name-suggestion.ts`, a small reducer with an
+  `edited` flag). Changing the series updates the suggestion until the admin types in the field; after that the typed value
+  is never replaced, and clearing it does not restore a suggestion (the empty value is reported by validation). Existing
+  editions start with `edited: true`, so the saved name is untouched. Slug rules are unchanged.
+- **Historical editions may be entered in any order.** `year` is the edition's identity and `label` its optional identifier;
+  neither is derived from `createdAt`, insertion order, the number of editions or the latest edition, and there is no
+  automatic edition number (no `editionNumber` column). Listings sort by `year desc`, then `startsOn desc` (undated first),
+  then name and id (`listEventEditions`); nothing relies on insertion order. Tested with editions created as
+  2026, 2027, 2024, 2023, 2025.
+
+## Contextual help
+
+Forms explain non-obvious fields with visible helper text linked through `aria-describedby` (so it works on mobile and
+with screen readers; no hover-only tooltips). The wording follows the rules in this README: edition year vs. event dates,
+event dates vs. registration dates, original date vs. current date, publication vs. event status vs. registration status
+(OPEN needs no URL), and Competition inheritance (dates and location inherited, times never). The edition form is grouped
+into General information, Status, Event schedule, Postponement, Registration and results, Organizers and Competitions.
+
+## Time zone and creation flow
+
+- `timeZone` is chosen in a searchable selector (`SearchableSelect`, options from `shared/time-zones.ts`): Latin American zones
+  first, then every zone the runtime knows. New editions default to `America/Caracas`; an existing value is always kept
+  (unlisted values such as `UTC` appear as "Current value"). Only the IANA identifier is stored; fixed offsets are rejected.
+- Creating an edition saves it and opens its edit page (`?notice=created`), where competitions are added in the
+  Competitions section. Editing an edition returns to the list as before. There is no combined save.
+- The Competitions section (`features/competitions/components/edition-competitions.tsx`) fixes the edition and reuses the
+  standalone Competition form and actions, so every Competition rule applies unchanged. It is rendered outside the edition
+  `<form>`; do not nest it inside, because dialog submit events bubble through portals.
 
 ## Status and publication
 
