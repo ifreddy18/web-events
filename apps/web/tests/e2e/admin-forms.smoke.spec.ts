@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test"
+import { ADMIN_STORAGE_STATE } from "./global-setup"
 
 // Smoke test of the Locations and Organizers forms. Global setup provisions a throwaway admin
 // in events_test (see global-setup.ts); a missing setup fails the run instead of skipping.
@@ -19,13 +20,8 @@ test("unauthenticated visitors are redirected to login", async ({ page }) => {
 })
 
 test.describe("signed in", () => {
-test.beforeEach(async ({ page }) => {
-  await page.goto("/login")
-  await page.getByLabel(/email/i).fill(email)
-  await page.getByLabel(/password/i).fill(password)
-  await page.getByRole("button", { name: /sign in|log in/i }).click()
-  await page.waitForURL("**/admin")
-})
+// Sign-in is rate limited (5/min), so global setup logs in once and shares the session.
+test.use({ storageState: ADMIN_STORAGE_STATE })
 
 test("organizer: validation, create, edit, delete", async ({ page }) => {
   await page.goto("/admin/organizers/new")
@@ -41,7 +37,7 @@ test("organizer: validation, create, edit, delete", async ({ page }) => {
   await page.keyboard.press("Enter")
   await page.waitForURL(/q=/)
   await hydrated(page)
-  await page.getByRole("link", { name: "Edit" }).click()
+  await page.getByRole("link", { name: "Edit", exact: true }).click()
   await page.waitForURL("**/edit")
   await hydrated(page)
   await page.getByLabel("Description").fill("Edited")
@@ -98,7 +94,7 @@ test("event series: validation, primary + co-organizers, edit assignments", asyn
   await page.getByRole("button", { name: "Search" }).click()
   const row = page.getByRole("row", { name: new RegExp(name) })
   await expect(row).toContainText("E2E Org Alpha +2")
-  await row.getByRole("link", { name: "Edit" }).click()
+  await row.getByRole("link", { name: "Edit", exact: true }).click()
   await expect(page.getByLabel("Primary organizer")).toHaveValue(/.+/)
   await hydrated(page)
 
@@ -161,7 +157,7 @@ test("event edition: validation, inherited organizers, edit assignments, same-ye
   await expect(row).toContainText("2031-05-10 → 2031-05-11")
 
   // Edit: dates round-trip unchanged, then make Gamma the primary and drop Alpha.
-  await row.getByRole("link", { name: "Edit" }).click()
+  await row.getByRole("link", { name: "Edit", exact: true }).click()
   await expect(selectedOption("primaryOrganizerId")).toHaveText("E2E Org Alpha")
   await hydrated(page)
   await expect(page.getByLabel("Start date")).toHaveValue("2031-05-10")
@@ -236,7 +232,7 @@ test("competition: validation, Trail Running metadata, edit, delete", async ({ p
   const row = page.getByRole("row", { name: new RegExp(name) })
   await expect(row).toContainText("2032-06-11")
   await expect(row).toContainText("E2E Venue, E2E City") // location inherited from the edition
-  await row.getByRole("link", { name: "Edit" }).click()
+  await row.getByRole("link", { name: "Edit", exact: true }).click()
   await page.waitForURL("**/edit")
   await hydrated(page)
 
@@ -254,7 +250,7 @@ test("competition: validation, Trail Running metadata, edit, delete", async ({ p
   await page.waitForURL(/q=/)
   await hydrated(page)
   await expect(page.getByRole("row", { name: new RegExp(name) })).toContainText("recreational")
-  await page.getByRole("row", { name: new RegExp(name) }).getByRole("link", { name: "Edit" }).click()
+  await page.getByRole("row", { name: new RegExp(name) }).getByRole("link", { name: "Edit", exact: true }).click()
   await page.waitForURL("**/edit")
   await hydrated(page)
   await expect(page.getByLabel("Distance (km)")).toHaveValue("21.5")

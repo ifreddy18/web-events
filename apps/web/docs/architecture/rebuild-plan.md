@@ -10,6 +10,7 @@
 - **Stages 6–8.5 done:** Locations, Organizers, EventSeries admin CRUD and the catalog seed (see the sections at the end).
 - **Stage 9 done:** EventEdition admin CRUD (see "Stage 9" at the end).
 - **Stage 10 done:** Competition admin CRUD (see "Stage 10" at the end).
+- **Stage 10.6 done:** Admin navigation shell (see "Stage 10.6" at the end).
 
 **Status:** Proposal, nothing applied. Baseline: `main` @ `c4d8605` (Prisma v2.2 docs approved); v1 preserved on `main_v1`.
 **Inputs inspected:** `apps/web` tree, `package.json`, configs (`prisma.config.ts`, `tsconfig.json`, `components.json`, `next.config.ts`), `src/server/db/prisma.tsx`, v2.2 proposal files (`schema_v2_2.prisma`, `_decisions.md`, `_constraints.sql`).
@@ -349,3 +350,17 @@ Fifth admin module. Files: `src/features/competitions/{schemas,queries,actions}.
 **Limitations.** Edition, discipline and location pickers are native selects (editions and locations capped at 500). Only Trail Running has a metadata form; other disciplines save without details. Unchecked "Beginner friendly" means "not set". `aidStations` appears in the legacy TypeScript interface but not in the approved Zod schema, so it is not editable (it is preserved if present). No restore, bulk actions or audit trail. The edition of a competition cannot be changed.
 
 **Next.** Stage 11: seed and end-to-end happy path (the roadmap's "Seed & e2e happy path"), then the public read layer. Athlete/Result admin and provider/resource/media admin remain deferred.
+
+## Stage 10.6 — Admin navigation shell (complete)
+
+Persistent navigation for all `/admin` pages. Files: `src/features/admin-shell/navigation.ts` (config + pure helpers), `components/{admin-shell,admin-navigation-links,admin-mobile-navigation,admin-breadcrumbs}.tsx`; `app/admin/layout.tsx` keeps the session/role gate and renders `AdminShell`; dashboard reduced to a short landing page. No schema, migration, auth or CRUD changes.
+
+**Decisions**
+- *One config:* `ADMIN_NAVIGATION` (Dashboard; Events: Event Series, Event Editions, Competitions; Catalogs: Organizers, Locations) drives the sidebar, the drawer and the breadcrumbs. Adding a finished module is a one-entry change; unfinished modules are not listed.
+- *Active item:* exact match for the dashboard, prefix match (`href` or `href/…`) for modules, so `new` and `[id]/edit` keep their module active. The active section label is emphasised.
+- *Breadcrumbs:* derived, not declared per route: `[section >] module [> New | Edit]`. The record id is hidden; section labels are not links (no section pages exist).
+- *Mobile:* the existing shadcn `Sheet` (side left) renders the same `AdminNavigationLinks`; it closes on link click, Escape returns focus to the trigger (Radix).
+
+**Tests.** Unit: `admin-navigation.test.ts` (config, active detection, nested routes, breadcrumbs). E2E: `admin-navigation.smoke.spec.ts` (sidebar navigation without reload, active items, create-page breadcrumbs, mobile drawer and no horizontal overflow). Test infrastructure: global setup now signs in once and shares `storageState` (Better Auth limits sign-in to 5/min and the suite needed more); Playwright runs with `workers: 1` because parallel files made `next dev` reload pages mid-test; the forms spec's Edit-link locator became `exact` because the sidebar now has an "Event Editions" link.
+
+**Limitations.** Sidebar is not collapsible; section labels are not links; breadcrumbs on a record show "Edit" without the record name.
