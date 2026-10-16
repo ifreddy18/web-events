@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import type { PrismaClient } from "@prisma/client"
-import { seedCatalog } from "../../prisma/seed/catalog"
+import { seedCatalog, seedProviderTypes } from "../../prisma/seed/catalog"
 import type { CatalogSport } from "../../prisma/seed/catalog.data"
 import { assertConnectedToTestDatabase, cleanupFixtures, createTestClient, P } from "./helpers"
 
@@ -59,5 +59,16 @@ describe("catalog seed (events_test)", () => {
     expect(s.skipped).toEqual([`${P}seed-b`])
     expect(await db.discipline.count({ where: { slug: `${P}seed-b1` } })).toBe(0)
     expect((await db.sport.findUniqueOrThrow({ where: { slug: `${P}seed-b` } })).deletedAt).not.toBeNull()
+  })
+})
+
+describe("provider type seed (events_test)", () => {
+  const providerTypes = [{ name: "Itest type", slug: `${P}seed-type`, description: "T" }]
+
+  it("inserts missing provider types once and never overwrites existing ones", async () => {
+    expect(await seedProviderTypes(db, providerTypes)).toEqual({ providerTypesCreated: 1, providerTypesExisting: 0 })
+    await db.serviceProviderType.update({ where: { slug: `${P}seed-type` }, data: { name: "Edited by hand" } })
+    expect(await seedProviderTypes(db, providerTypes)).toEqual({ providerTypesCreated: 0, providerTypesExisting: 1 })
+    expect((await db.serviceProviderType.findUniqueOrThrow({ where: { slug: `${P}seed-type` } })).name).toBe("Edited by hand")
   })
 })

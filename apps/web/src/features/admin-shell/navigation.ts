@@ -1,4 +1,4 @@
-import { Building2, CalendarRange, Flag, LayoutDashboard, MapPin, Trophy, type LucideIcon } from "lucide-react"
+import { Building2, Camera, CalendarRange, Flag, LayoutDashboard, MapPin, Trophy, type LucideIcon } from "lucide-react"
 
 export type AdminNavigationItem = {
   label: string
@@ -30,6 +30,7 @@ export const ADMIN_NAVIGATION: AdminNavigationSection[] = [
     items: [
       { label: "Organizers", href: "/admin/organizers", icon: Building2 },
       { label: "Locations", href: "/admin/locations", icon: MapPin },
+      { label: "Photographers", href: "/admin/photographers", icon: Camera },
     ],
   },
 ]

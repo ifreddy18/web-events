@@ -20,7 +20,7 @@ async function pickSearchable(page: Page, label: string, search: string, option:
 }
 
 test("unauthenticated visitors are redirected to login", async ({ page }) => {
-  for (const path of ["/admin", "/admin/organizers", "/admin/locations/new", "/admin/event-series", "/admin/event-series/new", "/admin/event-editions", "/admin/event-editions/new", "/admin/competitions", "/admin/competitions/new"]) {
+  for (const path of ["/admin", "/admin/organizers", "/admin/locations/new", "/admin/event-series", "/admin/event-series/new", "/admin/event-editions", "/admin/event-editions/new", "/admin/competitions", "/admin/competitions/new", "/admin/photographers", "/admin/photographers/new"]) {
     await page.goto(path)
     await expect(page).toHaveURL(/\/login/)
   }
@@ -58,6 +58,56 @@ test("organizer: validation, create, edit, delete", async ({ page }) => {
   await page.getByRole("button", { name: `Delete ${run} Club` }).click()
   await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click()
   await expect(page.getByRole("status")).toHaveText("Organizer deleted.")
+})
+
+test("photographer: Instagram-only create, edit, persistence, search, delete", async ({ page }) => {
+  const handle = `e2e.${Date.now()}`
+  await page.goto("/admin/photographers/new")
+  await hydrated(page)
+  await page.getByRole("button", { name: "Create photographer" }).click()
+  await expect(page.getByText("Name is required.")).toBeVisible()
+
+  // Only a name, an Instagram profile and a discipline: no website or other contact data is required.
+  await page.getByLabel("Public name").fill(`${run} Lens Studio`)
+  await page.getByLabel("Instagram").fill(`@${handle}`)
+  await page.getByRole("checkbox", { name: "E2E Discipline" }).check()
+  await expect(page.getByLabel("Public name")).toHaveAccessibleDescription(/studio or team/)
+  await page.getByRole("button", { name: "Create photographer" }).click()
+  await expect(page.getByRole("status")).toHaveText("Photographer created.")
+
+  await page.getByLabel("Search photographers").fill(run)
+  await page.keyboard.press("Enter")
+  await page.waitForURL(/q=/)
+  await hydrated(page)
+  await expect(page.getByRole("row", { name: new RegExp(`${run} Lens Studio.*@${handle}`) })).toBeVisible()
+  await page.getByRole("link", { name: "Edit", exact: true }).click()
+  await page.waitForURL("**/edit")
+  await hydrated(page)
+  await expect(page.getByRole("checkbox", { name: "E2E Discipline" })).toBeChecked()
+  await page.getByLabel("Biography").fill("Trail and road specialist")
+  await page.getByLabel("Website or portfolio").fill("https://example.com/portfolio")
+  await page.getByRole("button", { name: "Save changes" }).click()
+  await expect(page.getByRole("status")).toHaveText("Photographer updated.")
+
+  await page.getByLabel("Search photographers").fill(handle)
+  await page.keyboard.press("Enter")
+  await page.waitForURL(/q=/)
+  await hydrated(page)
+  await page.getByRole("link", { name: "Edit", exact: true }).click()
+  await page.waitForURL("**/edit")
+  await hydrated(page)
+  await expect(page.getByLabel("Biography")).toHaveValue("Trail and road specialist")
+  await expect(page.getByLabel("Website or portfolio")).toHaveValue("https://example.com/portfolio")
+  await expect(page.getByLabel("Instagram")).toHaveValue(handle)
+  await expect(page.getByRole("checkbox", { name: "E2E Discipline" })).toBeChecked()
+
+  await page.goto(`/admin/photographers?q=${encodeURIComponent(run)}`)
+  await hydrated(page)
+  await page.getByRole("button", { name: `Delete ${run} Lens Studio` }).click()
+  await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click()
+  await expect(page.getByRole("status")).toHaveText("Photographer deleted.")
+  await page.goto(`/admin/photographers?q=${encodeURIComponent(run)}`)
+  await expect(page.getByText(`No photographers match these filters.`)).toBeVisible()
 })
 
 test("location: validation, create, delete", async ({ page }) => {

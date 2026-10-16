@@ -120,3 +120,17 @@ export const CATALOG: CatalogSport[] = [
     ],
   },
 ]
+
+export type CatalogProviderType = { name: string; slug: string; description: string }
+
+/**
+ * ServiceProviderType rows the admin depends on. A provider is a photographer when it is linked to the
+ * "photographer" type; the slug is permanent. Other provider categories are added when their stage needs them.
+ */
+export const PROVIDER_TYPES: CatalogProviderType[] = [
+  {
+    name: "Photographer",
+    slug: "photographer",
+    description: "Sports photographer: an individual, studio or team covering events.",
+  },
+]

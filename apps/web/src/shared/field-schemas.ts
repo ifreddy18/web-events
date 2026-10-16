@@ -44,6 +44,19 @@ export const instagramHandle = z
     return raw.toLowerCase()
   })
 
+/** Trimmed, lower-cased email address; empty means "not set". */
+export const optionalEmail = z
+  .string()
+  .max(254, "Must be at most 254 characters.")
+  .optional()
+  .transform((v, ctx) => {
+    const raw = (v ?? "").trim().toLowerCase()
+    if (raw === "") return null
+    if (z.email().safeParse(raw).success) return raw
+    ctx.addIssue({ code: "custom", message: "Enter a valid email address." })
+    return z.NEVER
+  })
+
 /** Empty input means "not set" (TBA); anything else must be a real calendar date. */
 export const optionalLocalDate = z
   .string()

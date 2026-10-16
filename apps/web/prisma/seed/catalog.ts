@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client"
-import { CATALOG, type CatalogSport } from "./catalog.data.ts"
+import { CATALOG, PROVIDER_TYPES, type CatalogProviderType, type CatalogSport } from "./catalog.data.ts"
 
 export type CatalogSummary = {
   sportsCreated: number
@@ -46,4 +46,13 @@ export async function seedCatalog(db: PrismaClient, catalog: CatalogSport[] = CA
     }
     return summary
   })
+}
+
+/**
+ * Inserts missing service provider types, keyed by slug. Existing rows are never updated, so reruns are
+ * no-ops (`skipDuplicates` = ON CONFLICT DO NOTHING). Returns how many rows were really inserted.
+ */
+export async function seedProviderTypes(db: PrismaClient, providerTypes: CatalogProviderType[] = PROVIDER_TYPES) {
+  const { count } = await db.serviceProviderType.createMany({ data: providerTypes, skipDuplicates: true })
+  return { providerTypesCreated: count, providerTypesExisting: providerTypes.length - count }
 }

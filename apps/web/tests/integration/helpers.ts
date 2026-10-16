@@ -34,7 +34,13 @@ export async function cleanupFixtures(db: PrismaClient) {
   await db.eventSeries.deleteMany({ where: { slug: like } })
   await db.eventEdition.deleteMany({ where: { location: { slug: like } } })
   await db.location.deleteMany({ where: { slug: like } })
+  const providers = { provider: { slug: like } }
+  await db.serviceProviderToType.deleteMany({ where: providers })
+  await db.serviceProviderDiscipline.deleteMany({ where: providers })
+  await db.serviceProviderMedia.deleteMany({ where: providers })
+  await db.serviceProviderTag.deleteMany({ where: providers })
   await db.serviceProvider.deleteMany({ where: { slug: like } })
+  await db.serviceProviderType.deleteMany({ where: { slug: like } })
   await db.organizer.deleteMany({ where: { slug: like } })
   // Competition metadata is keyed by the real "trail-running" slug, so tests that need it create one
   // under a prefixed sport; it is only removed here when it hangs off such a sport.

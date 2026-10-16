@@ -284,3 +284,19 @@ export function buildCountryGroups(currentValue?: string): SelectGroup[] {
   groups.push({ heading: "All countries", options: COUNTRY_NAMES.filter((name) => !prioritized.has(name)).map(toOption) })
   return groups
 }
+
+const COUNTRY_CODES = new Set(COUNTRIES.map((country) => country.code))
+
+/** ISO 3166-1 alpha-2 code check, for fields that store the code (ServiceProvider.countryCode). */
+export const isCountryCode = (value: string) => COUNTRY_CODES.has(value)
+
+/** Like `buildCountryGroups`, but option values are the alpha-2 codes. */
+export function buildCountryCodeGroups(): SelectGroup[] {
+  const latinAmerica = LATIN_AMERICA_CODES.flatMap((code) => COUNTRIES.filter((country) => country.code === code))
+  const prioritized = new Set(LATIN_AMERICA_CODES)
+  const toOption = (country: Country) => ({ value: country.code, label: country.name })
+  return [
+    { heading: "Latin America", options: latinAmerica.map(toOption) },
+    { heading: "All countries", options: COUNTRIES.filter((country) => !prioritized.has(country.code)).map(toOption) },
+  ]
+}

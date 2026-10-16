@@ -9,7 +9,7 @@ describe("admin navigation configuration", () => {
     expect(ADMIN_NAVIGATION.map((section) => [section.label, section.items.map((item) => item.label)])).toEqual([
       [null, ["Dashboard"]],
       ["Events", ["Event Series", "Event Editions", "Competitions"]],
-      ["Catalogs", ["Organizers", "Locations"]],
+      ["Catalogs", ["Organizers", "Locations", "Photographers"]],
     ])
     expect(new Set(allItems.map((item) => item.href)).size).toBe(allItems.length)
   })

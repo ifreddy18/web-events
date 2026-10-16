@@ -387,3 +387,21 @@ Three usability fixes found while entering real events. No schema, migration, au
 - *Historical editions:* confirmed no query or rule depends on insertion order; listing is `year desc, startsOn desc, name, id`. Documented in the Event editions README; regression tests insert 2026, 2027, 2024, 2023, 2025. No schema change, no `editionNumber`.
 - *Tests added:* 6 unit (name suggestion), 4 integration (historical editions), E2E assertions for autofill and accessible descriptions.
 - *Limitation:* help text is static English; the series status hint only describes what the picker does because the schema defines no further semantics.
+
+## Stage 11 — Photographer profiles admin (complete)
+
+Admin CRUD at `/admin/photographers` (list with search + discipline filter + pagination, new, edit, soft delete with confirmation) on the existing `ServiceProvider` model. No schema, migration or auth changes. Details and rules: `src/features/photographers/README.md`.
+
+**Decisions**
+- *Classification:* ServiceProvider linked to `ServiceProviderType` slug `photographer`; type added to the idempotent seed (`seedProviderTypes`, run by `pnpm db:seed`). No ServiceProviderType CRUD.
+- *Profile:* uses only existing columns; all contact fields optional (Instagram-only valid); disciplines via checkboxes grouped by sport and diffed in one transaction; other types, media, tags and event assignments are preserved.
+- *Duplicates:* by Instagram/website/email only; same display names are allowed (auto slug gets a numeric suffix).
+- *Soft delete:* blocked while the photographer has an active `EventServiceProvider` on a non-deleted edition; historical rows are kept and never block. Future assignment mutations must `FOR SHARE` the provider row. No restore.
+- *Media:* external `profileImageUrl` only. `ServiceProviderMedia` portfolio editor and event galleries (`EventResource`) are deferred.
+- Shared additions: `optionalEmail` (field-schemas), country-code helpers (countries), "Photographers" in the Catalogs navigation.
+
+**Tests.** Unit: schemas and rules. Integration: authorization, create/update/delete, duplicates, discipline diff, rollback on lost slug race and on a discipline deleted mid-flight, delete blocked by active assignments and concurrent assign/delete, relationship preservation, search/filter/pagination, provider-type seed idempotency. E2E: one photographer journey; `scripts/e2e-admin.ts` seeds the provider type in `events_test` and removes `itest-e2e-` providers.
+
+**Limitations.** Individual/studio/team is not a stored attribute. Duplicate checks have no DB constraint. Country is chosen by ISO code; no restore, bulk actions or audit trail.
+
+**Next.** EventServiceProvider assignments (photographers per edition), then EventResource gallery links.

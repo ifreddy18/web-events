@@ -15,7 +15,7 @@ Next.js 16 (App Router, `--webpack`), React 19, TypeScript strict, Prisma 6 + Po
 ## Architecture
 ```
 app/                     routes only: thin pages/layouts that call features
-src/features/<feature>/  one folder per domain area (organizers, locations, event-series, event-editions, competitions)
+src/features/<feature>/  one folder per domain area (organizers, locations, event-series, event-editions, competitions, photographers)
   schemas.ts             Zod input validation; types via z.infer
   queries.ts             DB reads (import "server-only")
   actions.ts             "use server" mutations

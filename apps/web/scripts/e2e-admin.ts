@@ -3,6 +3,7 @@
 //   node --conditions=react-server scripts/e2e-admin.ts cleanup  (E2E_ADMIN_EMAIL in env)
 import { PrismaClient } from "@prisma/client"
 import { assertSafeTestDatabaseUrl } from "../tests/support/db-safety.ts"
+import { seedProviderTypes } from "../prisma/seed/catalog.ts"
 import { createUserWithPassword } from "../src/server/auth/provision.ts"
 
 const url = assertSafeTestDatabaseUrl(process.env.DATABASE_URL)
@@ -26,6 +27,8 @@ try {
       update: {},
       create: { name: "E2E Discipline", slug: `${PREFIX}discipline`, sportId: sport.id },
     })
+    // The photographer form needs the real "photographer" provider type (idempotent, kept after the run).
+    await seedProviderTypes(db)
     const organizerIds: Record<string, string> = {}
     for (const n of ["Alpha", "Beta", "Gamma"]) {
       const organizer = await db.organizer.upsert({ where: { slug: `${PREFIX}org-${n.toLowerCase()}` }, update: {}, create: { name: `E2E Org ${n}`, slug: `${PREFIX}org-${n.toLowerCase()}` } })
@@ -75,6 +78,10 @@ try {
     await db.eventSeriesOrganizer.deleteMany({ where: { eventSeries: { slug: { startsWith: PREFIX } } } })
     await db.eventSeries.deleteMany({ where: { slug: { startsWith: PREFIX }, editions: { none: {} } } })
     await db.organizer.deleteMany({ where: { slug: { startsWith: PREFIX }, seriesAssignments: { none: {} }, editionAssignments: { none: {} } } })
+    const e2eProviders = { provider: { slug: { startsWith: PREFIX } } }
+    await db.serviceProviderToType.deleteMany({ where: e2eProviders })
+    await db.serviceProviderDiscipline.deleteMany({ where: e2eProviders })
+    await db.serviceProvider.deleteMany({ where: { slug: { startsWith: PREFIX }, eventAssignments: { none: {} } } })
     await db.location.deleteMany({ where: { slug: { startsWith: PREFIX }, eventEditions: { none: {} }, competitions: { none: {} } } })
     await db.discipline.deleteMany({ where: { slug: "trail-running", sport: { slug: `${PREFIX}sport` }, eventSeries: { none: {} }, competitions: { none: {} } } })
     await db.discipline.deleteMany({ where: { slug: `${PREFIX}discipline`, eventSeries: { none: {} } } })
