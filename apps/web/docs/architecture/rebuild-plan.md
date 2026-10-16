@@ -405,3 +405,23 @@ Admin CRUD at `/admin/photographers` (list with search + discipline filter + pag
 **Limitations.** Individual/studio/team is not a stored attribute. Duplicate checks have no DB constraint. Country is chosen by ISO code; no restore, bulk actions or audit trail.
 
 **Next.** EventServiceProvider assignments (photographers per edition), then EventResource gallery links.
+
+## Stage 12 — Event photographers (complete)
+
+Photographers are assigned to editions from a **Photographers** section on `/admin/event-editions/[id]/edit` (no separate module). New feature `src/features/event-photographers/` (`schemas`, `rules`, `queries`, `actions`, `components/`, `README.md`) on the existing `EventServiceProvider` model. No schema, migration or auth changes; no changes to the photographers or edition actions. Rules, lifecycle and lock order: `src/features/event-photographers/README.md`.
+
+**Model findings.** `EventServiceProvider` = a provider's appearance at an edition: `role` (`ServiceProviderRole`, this feature fixes `PHOTOGRAPHER`), `accreditation` (`OFFICIAL` / `INDEPENDENT` / `UNKNOWN`, per edition), `description`, `deletedAt`. `@@unique([eventEditionId, providerId, role])` also reserves soft-deleted rows; `@@unique([id, eventEditionId])` backs the future `EventResource` composite FK. Official/independent is therefore an attribute of the appearance, never of the profile.
+
+**Decisions**
+- *Re-adding a removed photographer restores the reserved row* (same id, new accreditation/note), following schema decision 11 ("restore rather than insert duplicates"); the id matters because galleries will reference it. No separate restore action.
+- *Removal* is soft and is blocked while active `EventResource` rows use the assignment (same convention as deleting an edition with children). Moot until galleries exist; stated now so the later stage pairs it with a lock.
+- *Editable fields:* accreditation and note only; the photographer, edition and role are the identity. `UNKNOWN` is shown as "Not specified" and is the default.
+- *Picker:* server-side search (name or Instagram, `@` ignored) in the dialog through an admin-guarded action, 20 per page with "Show more", native radio group; already-assigned photographers are shown disabled; same names are told apart by Instagram, place and slug. No new profiles from the dialog, only a link to Photographers.
+- *Help:* wording only restates what the schema defines (recorded designation per edition; the same person can be official in one edition and independent in another).
+- *Lock order:* edition `FOR SHARE` → provider `FOR SHARE` → assignment `FOR UPDATE`. Edition share lock pairs with edition update/delete and is competitions' first lock; provider share lock implements the Stage 11 contract with `deletePhotographer`'s `FOR UPDATE`. No other path takes these in a different order. `P2002` → conflict, `P2003` → "no longer available".
+
+**Tests.** Unit: 11 (schemas, search term, help text). Integration (`events_test`): 38 covering authorization of add/update/remove/search, official/independent/default creation, several photographers per edition, one photographer across editions (same series, historical), duplicates, invalid/deleted/non-photographer providers, invalid/deleted editions, other roles untouched, update and immutability, removal (other assignments, profile and edition untouched, profile deletable afterwards, blocked only by active galleries of that assignment), restore, listing, search/filter/pagination/flags, lost-race `P2002`, concurrent photographer deletion, concurrent edition deletion, update vs removal. Removing the `FOR SHARE` clauses makes four of them fail. One E2E journey (search by Instagram and name, independent + official, disabled duplicate, reload, edit, remove, other assignment and profile remain, mobile viewport); `scripts/e2e-admin.ts` seeds an edition and two photographers and removes their assignments on cleanup.
+
+**Limitations.** No gallery links (`EventResource`), no other provider roles, no bulk assignment, no assignment history view. The edition page lists all of an edition's photographers (no cap) and the picker searches only name and Instagram. Two admins editing the same assignment get last-write-wins on accreditation/note (row-serialized, no version check).
+
+**Next.** `EventResource` gallery links per photographer appearance (take the assignment row `FOR SHARE`), then the public read layer.

@@ -2,14 +2,14 @@
 
 Admin CRUD for `EventEdition`: one occurrence of an `EventSeries` (e.g. "Maratón del Sol 2030, Primavera").
 Routes: `/admin/event-editions`, `/new`, `/[id]/edit`. Competitions are a separate feature (`features/competitions`),
-but the edit page embeds its Competitions section (see below).
+but the edit page embeds its Competitions section (see below) and the Photographers section (`features/event-photographers`).
 
 ## Responsibilities
 
 - Create, edit, list (search, filters, pagination) and soft-delete editions.
 - Own the edition's organizer assignments (`EventEditionOrganizer`).
 - Validate dates, statuses and references; map conflicts to `ActionResult` errors.
-- It does **not** create or edit Locations, Series, Organizers or Competitions itself; the edit page only hosts the Competitions feature's section.
+- It does **not** create or edit Locations, Series, Organizers, Competitions or photographer assignments itself; the edit page only hosts those features' sections.
 
 ## Identity: several editions per series and year
 
@@ -98,7 +98,7 @@ assignment changes as well. Lock order, always:
 4. organizer rows `FOR SHARE`, `ORDER BY id` (paired with `deleteOrganizer`).
 
 Deleting a location or organizer takes only its own row, so no cycle is possible. Delete locks only the edition row.
-**Code that adds children to an edition (competitions do; providers, resources and media must) takes the edition row
+**Code that adds children to an edition (competitions and photographer assignments do; resources and media must) takes the edition row
 `FOR SHARE` and re-checks `deletedAt` in its transaction**, otherwise it can race with `deleteEventEdition`.
 
 ## Deletion

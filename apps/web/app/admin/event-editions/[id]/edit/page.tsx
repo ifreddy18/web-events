@@ -2,6 +2,8 @@ import { notFound } from "next/navigation"
 import { EventEditionForm } from "@/features/event-editions/components/event-edition-form"
 import { EditionCompetitions } from "@/features/competitions/components/edition-competitions"
 import { listDisciplineOptions, listEditionCompetitions, listLocationOptions as listCompetitionLocationOptions } from "@/features/competitions/queries"
+import { EditionPhotographers } from "@/features/event-photographers/components/edition-photographers"
+import { listEditionPhotographers } from "@/features/event-photographers/queries"
 import { getEventEdition, listLocationOptions, listOrganizerOptions } from "@/features/event-editions/queries"
 
 export const metadata = { title: "Edit edition" }
@@ -15,12 +17,13 @@ export default async function EditEventEditionPage({
 }) {
   const edition = await getEventEdition((await params).id)
   if (!edition) notFound()
-  const [locations, organizers, competitions, disciplines, competitionLocations] = await Promise.all([
+  const [locations, organizers, competitions, disciplines, competitionLocations, photographers] = await Promise.all([
     listLocationOptions(),
     listOrganizerOptions(),
     listEditionCompetitions(edition.id),
     listDisciplineOptions(),
     listCompetitionLocationOptions(),
+    listEditionPhotographers(edition.id),
   ])
   const notice = (await searchParams).notice === "created" ? "Edition created. You can now add its competitions below." : null
 
@@ -73,6 +76,7 @@ export default async function EditEventEditionPage({
         disciplines={disciplines}
         locations={competitionLocations}
       />
+      <EditionPhotographers eventEditionId={edition.id} photographers={photographers} />
     </div>
   )
 }

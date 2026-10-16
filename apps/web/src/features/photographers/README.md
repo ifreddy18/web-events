@@ -25,8 +25,9 @@ Admin CRUD for photographer profiles at `/admin/photographers`. There is no Phot
 - **Soft delete** sets `deletedAt`. It is blocked (`conflict`: unassign first) while the provider has an `EventServiceProvider`
   row with `deletedAt` null on an edition with `deletedAt` null. Deleted assignments/editions are history: they never block and
   are never modified. Nothing is physically deleted. No restore yet.
-- **Lock contract for future EventServiceProvider mutations:** take the provider row `FOR SHARE` (re-checking
+- **Lock contract for EventServiceProvider mutations:** take the provider row `FOR SHARE` (re-checking
   `deleted_at IS NULL`) in the same transaction as the insert/update; `deletePhotographer` takes it `FOR UPDATE`.
+  Implemented by `features/event-photographers` (see its README for the full lock order).
 
 ## Profile media
 Only `profileImageUrl` (an external URL, no upload) is managed. `ServiceProviderMedia` (portfolio/gallery images through
@@ -38,7 +39,7 @@ Add a `ServiceProviderType` seed entry and a feature that filters on its slug th
 discipline diff. Do not add type-specific columns: put them in `ServiceProvider.metadata` with a validated schema.
 
 ## Deferred
-Event assignments (`EventServiceProvider`), event galleries (`EventResource`), portfolio media, restore, public pages,
+Event galleries (`EventResource`), portfolio media, restore, public pages,
 self-registration/claiming.
 
 ## Tests

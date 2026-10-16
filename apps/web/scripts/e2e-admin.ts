@@ -70,9 +70,24 @@ try {
         locationId: venue.id,
       },
     })
+    // Edition photographers journey: an edition of its own and two photographers (one without Instagram).
+    await db.eventEdition.upsert({
+      where: { slug: `${PREFIX}photographers-edition` },
+      update: {},
+      create: { eventSeriesId: templateSeries.id, name: "E2E Photographers Edition", slug: `${PREFIX}photographers-edition`, year: 2034 },
+    })
+    const photographerType = await db.serviceProviderType.findUniqueOrThrow({ where: { slug: "photographer" } })
+    for (const [key, name, instagram] of [["lens-alpha", "E2E Lens Alpha", "e2e.lens.alpha"], ["lens-beta", "E2E Lens Beta", null]] as const) {
+      await db.serviceProvider.upsert({
+        where: { slug: `${PREFIX}${key}` },
+        update: {},
+        create: { name, slug: `${PREFIX}${key}`, instagram, providerTypes: { create: { typeId: photographerType.id } } },
+      })
+    }
   } else if (process.argv[2] === "cleanup") {
     // Editions created through the UI are only soft-deleted there; remove them (and their assignments) here.
     await db.competition.deleteMany({ where: { eventEdition: { slug: { startsWith: PREFIX } } } })
+    await db.eventServiceProvider.deleteMany({ where: { OR: [{ eventEdition: { slug: { startsWith: PREFIX } } }, { provider: { slug: { startsWith: PREFIX } } }] } })
     await db.eventEditionOrganizer.deleteMany({ where: { eventEdition: { slug: { startsWith: PREFIX } } } })
     await db.eventEdition.deleteMany({ where: { slug: { startsWith: PREFIX } } })
     await db.eventSeriesOrganizer.deleteMany({ where: { eventSeries: { slug: { startsWith: PREFIX } } } })
